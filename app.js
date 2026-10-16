@@ -111,7 +111,8 @@ function hoursState(p, dayId, lmin) {
     if (s == null) return { k: "unknown", txt: "horaire non affiché" };
     const e = e0 == null ? null : e0 <= s ? e0 + 1440 : e0;
     if (lmin < s) return { k: "later", txt: "commence à " + fmtMin(s), at: s };
-    if (e == null || lmin < e) return { k: "open", txt: e ? "jusqu'à " + fmtMin(e) : "en cours", until: e };
+    if (e == null) return lmin < s + 180 ? { k: "open", txt: "en cours (fin non affichée)" } : { k: "closed", txt: "sans doute terminé" };
+    if (lmin < e) return { k: "open", txt: "jusqu'à " + fmtMin(e), until: e };
     return { k: "closed", txt: "terminé" };
   }
   const h = p.h && p.h[dayId];
@@ -471,7 +472,7 @@ function timeline(day, { lmin = null, controls = false } = {}) {
     const w = prev && s.p.lat != null ? walkMin(dist(prev, s.p)) : null;
     const cls = [done ? "done" : "", skipped ? "skipped" : "", nx && nx.id === s.id && lmin != null ? "isnext" : ""].join(" ");
     html += `<li class="${cls}"><span class="time num">${s.at}</span><span class="rail"><span class="dot"></span></span><div class="body">
-      ${w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied</div>` : ""}
+      ${s.via ? `<div class="walk">${icon("ferry", "i s")} ${esc(s.via)}</div>` : w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied</div>` : ""}
       <button type="button" class="item" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat, done)}
         <span class="nm">${esc(s.id === "base" ? "Auberge : déposer les sacs" : s.p.name)}</span>
         <span class="num small" style="font-weight:700">${s.p.price != null ? euro(s.p.price) : ""}</span></button>
@@ -571,7 +572,7 @@ function nextCard(c, s) {
       ${p.price != null ? `<span class="price num">${euro(p.price)}</span>` : ""}</div>
     ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
     ${s.note ? `<p class="why"><b>${esc(s.note)}</b></p>` : ""}
-    <div class="meta row">${icon("walk", "i s")}<span class="grow">${w} min ${esc(org.label)}${!here && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
+    <div class="meta row">${icon(s.via ? "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : `${w} min ${esc(org.label)}`}${!here && !s.via && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
     ${alerts.join("")}
     <div class="btns"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="stepDone" data-day="${day}" data-id="${s.id}">${icon("check")} Fait</button>
@@ -866,7 +867,7 @@ function layersSheet() {
 }
 
 // ───────────── GPS ─────────────
-let watchId = null, lastRender = 0;
+let watchId = null, lastRender = 0, gpsWarned = false;
 const inside = {};
 function updateLocBtn() {
   const b = $("#btnLocate");
@@ -896,8 +897,9 @@ function onPos(pos) {
 }
 function onPosErr(e) {
   const msg = { 1: "Position refusée. Les distances partent de l'auberge. Réactivez la localisation pour ce site dans les réglages du navigateur.", 2: "Position introuvable pour l'instant.", 3: "Le GPS met du temps à répondre." }[e.code] || "GPS indisponible.";
-  toast(msg);
-  if (e.code === 1) stopGps();
+  if (e.code === 1) { toast(msg); stopGps(); return; }
+  // Perte de signal passagère (intérieur, tunnel) : on le dit une fois, sans écraser un message utile
+  if (!me && !gpsWarned) { gpsWarned = true; toast(msg, { low: true }); }
 }
 // Jour où un lieu est une étape du plan
 const PLAN_DAY = {};
