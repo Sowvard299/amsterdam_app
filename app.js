@@ -30,13 +30,15 @@ function clock(d = now()) {
   const lmin = early ? a.min + 1440 : a.min;
   const idx = DAYS.findIndex(x => x.date === logical);
   let phase = "after";
-  if (logical < DAYS[0].date) phase = "before";
+  if (a.date === TRIP.leave && a.min >= 3 * 60 && a.min < 18 * 60) phase = "leave"; // premiers trains dès 03:46
+  else if (logical < DAYS[0].date) phase = "before";
   else if (idx >= 0) phase = "day";
   else if (logical === TRIP.leave && a.min < 18 * 60) phase = "leave";
-  return { a, logical, lmin, idx, phase, day: idx >= 0 ? DAYS[idx] : null };
+  return { a, logical, lmin, idx, phase, day: phase === "day" ? DAYS[idx] : null };
 }
 // « 23:30 » → minutes du jour logique ; avant 06:00 on ajoute 24 h
 function tmin(s) { const m = /^(\d{1,2}):(\d{2})/.exec(s || ""); if (!m) return null; let v = +m[1] * 60 + +m[2]; if (v < 360) v += 1440; return v; }
+const durTxt = m => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`);
 const fmtMin = v => { v = ((Math.round(v) % 1440) + 1440) % 1440; return String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0"); };
 
 // ───────────── Données ─────────────
@@ -78,6 +80,7 @@ function applyTheme() {
   const r = document.documentElement;
   if (state.theme === "system") r.removeAttribute("data-theme"); else r.dataset.theme = state.theme;
   if (state.text === "large") r.dataset.text = "large"; else r.removeAttribute("data-text");
+  if (typeof drawMarkers === "function" && mapReady) drawMarkers(true); // la couleur du parcours vient du thème
 }
 
 // ───────────── Géographie ─────────────
@@ -159,15 +162,25 @@ const smallShape = (cat, done) => `<span class="shape" aria-hidden="true">${shap
 // ───────────── Plan ─────────────
 const stepKey = (s, day) => (s.id === "base" ? "base-" + day : s.id);
 const isDone = k => !!state.checked[k];
-const isSkipped = (day, s) => !!state.skipped[day + ":" + s.id];
+const isSkipped = (day, s) => state.skipped[day + ":" + s.id] === true;
 function plan(day) { return (PLAN[day] || []).map(s => ({ ...s, p: BYID[s.id], t: tmin(s.at) })); }
 // Une étape dont l'heure est largement dépassée est considérée comme manquée (sauf si on la coche)
 // ou dont le lieu sera fermé à l'arrivée
 function missed(s, lmin, day) {
-  if (lmin == null) return false;
+  if (lmin == null || state.skipped[day + ":" + s.id] === false) return false; // remise à la main
   if (lmin > s.t + (s.dur || 60) + 15) return true;
   if (s.p.cat === "base" || lmin < s.t - 60) return false;
-  return hoursState(s.p, day, lmin + (walkFrom(s.p) || 0)).k === "closed";
+  return hoursState(s.p, day, lmin + walkMin(dist(originFor(day, s, lmin).o, s.p))).k === "closed";
+}
+// D'où part-on vers une étape : votre position, sinon l'étape précédente (faite ou dont l'heure est passée), sinon l'auberge
+function originFor(day, s, lmin) {
+  if (me) return { o: me, label: "depuis vous" };
+  const steps = plan(day), i = steps.findIndex(x => x.id === s.id);
+  for (let j = i - 1; j >= 0; j--) {
+    const q = steps[j];
+    if (q.p.lat != null && (isDone(stepKey(q, day)) || (lmin != null && lmin >= q.t))) return { o: q.p, label: q.id === "base" ? "depuis l'auberge" : "depuis " + q.p.name };
+  }
+  return { o: BASE, label: "depuis l'auberge" };
 }
 function nextStep(day, lmin = null) { return plan(day).find(s => !isDone(stepKey(s, day)) && !isSkipped(day, s) && !missed(s, lmin, day)); }
 // Prix d'offre réservé à un jour (ex. jeudi étudiant) : inconnu les autres jours
@@ -250,7 +263,7 @@ const ferryCache = {};
 async function loadFerries(key) {
   const c = ferryCache[key];
   if (c && Date.now() - c.ts < 60e3) return c.list;
-  const r = await fetchTimeout(`https://api.transitous.org/api/v1/stoptimes?stopId=${FERRY[key]}&n=10&mode=FERRY`);
+  const r = await fetchTimeout(`https://api.transitous.org/api/v1/stoptimes?stopId=${FERRY[key]}&n=30&mode=FERRY`);
   if (!r.ok) throw new Error("http " + r.status);
   const d = await r.json();
   const list = (d.stopTimes || []).map(st => ({ line: st.routeShortName || st.displayName || "", to: st.headsign, t: new Date(st.place.departure || st.place.scheduledDeparture) }))
@@ -266,7 +279,9 @@ function ferryBlock(key, title) {
     if (!navigator.onLine) { el.innerHTML = `<p class="small muted">Hors ligne. F3 : toutes les 4 à 12 min, jour et nuit. F4 : toutes les 15 min, 30 min après 19:00.</p>`; return; }
     try {
       const l = await loadFerries(key);
-      el.innerHTML = l.length ? l.slice(0, 6).map(x => `<div class="tel"><span><b>${esc(x.line)}</b> → ${esc(x.to)}</span><span class="num">${hhmm(x.t)}</span></div>`).join("")
+      const per = {};
+      const rows = l.filter(x => (per[x.line] = (per[x.line] || 0) + 1) <= 3);
+      el.innerHTML = rows.length ? rows.map(x => `<div class="tel"><span><b>${esc(x.line)}</b> → ${esc(x.to)}</span><span class="num">${hhmm(x.t)}</span></div>`).join("")
         : `<p class="small muted">Aucun départ trouvé.</p>`;
     } catch (e) { el.innerHTML = `<p class="small muted">Horaires indisponibles. F3 tourne jour et nuit, toutes les 4 à 12 min.</p>`; }
   }, 0);
@@ -277,9 +292,9 @@ function ferryBlock(key, title) {
 // ───────────── Essentiels ─────────────
 const ESSDEF = {
   wc: { label: "WC", icon: "wc", one: "Toilettes" },
-  atm: { label: "Distributeur", icon: "euro", one: "Distributeur" },
-  sm: { label: "Supermarché", icon: "cart", one: "Supermarché" },
-  ph: { label: "Pharmacie", icon: "plus", one: "Pharmacie" },
+  atm: { label: "DAB", icon: "euro", one: "Distributeur" },
+  sm: { label: "Super", icon: "cart", one: "Supermarché" },
+  ph: { label: "Pharma", icon: "plus", one: "Pharmacie" },
 };
 function essList(type) {
   return ESS[type].filter(e => type !== "wc" || state.layers.urinals || !e[5]).map(e => ({ lat: e[0], lon: e[1], e }));
@@ -335,8 +350,12 @@ function closeSheet(fromPop = false) {
   $("#scrim").classList.remove("on");
   if (selMarker) { selMarker = null; drawMarkers(); }
   if (!fromPop) history.back();
-  if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+  if (sh.contains(document.activeElement)) document.activeElement.blur();
+  const back = lastFocus && lastFocus.isConnected ? lastFocus
+    : lastFocus && lastFocus.dataset && lastFocus.dataset.id ? document.querySelector(`.screen.active [data-act="open"][data-id="${CSS.escape(lastFocus.dataset.id)}"]`) : null;
+  if (back && back.focus) back.focus({ preventScroll: true });
 }
+document.addEventListener("keydown", e => { if (e.key === "Escape" && sheetOpen) closeSheet(); });
 window.addEventListener("popstate", () => { if (sheetOpen) closeSheet(true); });
 $("#scrim").addEventListener("click", () => closeSheet());
 $("#sheetGrab").addEventListener("click", () => $("#sheet").classList.toggle("full"));
@@ -409,7 +428,12 @@ function placeSheet(id) {
     ${p.cat !== "base" ? `<div class="kv"><h4>Fiabilité</h4><p>${confBadge(p.conf)} <span class="xs muted">vérifié le 15 oct.</span></p><div class="srcs">${src}</div></div>` : ""}
     ${p.cat !== "base" ? `<div class="kv"><h4>Mes notes</h4><textarea data-note="${id}" placeholder="Visible seulement sur ce téléphone">${esc(state.notes[id] || "")}</textarea></div>` : ""}`;
   openSheet(head, content);
-  if (mapReady && p.lat != null && $("#s-map").classList.contains("active")) { selMarker = id; drawMarkers(); }
+  if (mapReady && p.lat != null && $("#s-map").classList.contains("active")) {
+    selMarker = id; drawMarkers();
+    const sheetTop = innerHeight * 0.38, mapTop = $("#map").getBoundingClientRect().top;
+    const pt = map.latLngToContainerPoint([p.lat, p.lon]);
+    map.panBy([pt.x - map.getSize().x / 2, pt.y - (sheetTop - mapTop) / 2], { animate: true });
+  }
 }
 
 // ───────────── Composants de liste ─────────────
@@ -418,10 +442,10 @@ function placeRow(p, { dayId = null, lmin = 0, showDay = false } = {}) {
   const st = dayId ? hoursState(p, dayId, lmin) : null;
   const done = isDone(p.id);
   const subs = [];
-  if (w) subs.push(`${w} min`);
-  if (p.cat === "party") subs.push(`${showDay && DAYBY[p.date] ? DAYBY[p.date].label + " · " : ""}${esc(p.start)}`);
+  if (w) subs.push(`<span>${w} min</span>`);
+  if (p.cat === "party") subs.push(`<span>${DAYBY[p.date] && (showDay || p.date !== dayId) ? DAYBY[p.date].label + " · " : ""}${esc(p.start)}</span>`);
   if (st && p.cat !== "party") subs.push(stateTag(st));
-  if (p.cat === "party") subs.push(esc(p.venue));
+  if (p.cat === "party") subs.push(`<span>${esc(p.venue)}</span>`);
   subs.push(confBadge(p.conf));
   if (p.soldOut) subs.push(`<span class="tag closed">complet</span>`);
   const pr = priceOn(p, dayId);
@@ -487,8 +511,8 @@ function dueBadge(due, today) {
 }
 function ckRow(it, today) {
   const done = !!state.ck[it.id];
-  return `<label class="ck${done ? " done" : ""}"><input type="checkbox" data-act="ck" data-id="${it.id}" ${done ? "checked" : ""}>
-    <span class="t">${esc(it.txt)}${it.url ? ` · <a href="${esc(it.url)}" target="_blank" rel="noopener">ouvrir</a>` : ""}</span>${done ? "" : dueBadge(it.due, today)}</label>`;
+  return `<div class="ck${done ? " done" : ""}"><label class="cbx"><input type="checkbox" data-act="ck" data-id="${it.id}" ${done ? "checked" : ""} aria-label="Fait : ${esc(it.txt)}"></label>
+    ${it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.txt)} ↗</a>` : `<span class="t">${esc(it.txt)}</span>`}${done ? "" : dueBadge(it.due, today)}</div>`;
 }
 function todayBefore(c) {
   const n = daysBetween(c.a.date, TRIP.start);
@@ -528,7 +552,7 @@ function nextCard(c, s) {
   if (!s) {
     return `<div class="card pad next"><div class="when">Programme terminé</div><h3>Bien joué</h3><p class="why">Tout le plan du jour est fait ou passé. Regardez « Ce soir » ou rentrez.</p></div>`;
   }
-  const p = s.p, w = walkFrom(p) || 0;
+  const p = s.p, org = originFor(day, s, c.lmin), w = p.lat != null ? walkMin(dist(org.o, p)) : 0;
   const leave = s.t - w - 3;
   const arrive = Math.max(c.lmin + w, s.t);
   const stArr = p.cat !== "base" ? hoursState(p, day, arrive) : null;
@@ -537,14 +561,17 @@ function nextCard(c, s) {
   const alerts = [];
   if (stArr && (stArr.k === "closed")) alerts.push(`<div class="alert bad">${icon("alert", "i s")} ${p.cat === "party" ? "Terminé à votre arrivée" : "Fermé à votre arrivée"} (${esc(stArr.txt)})</div>`);
   else if (stArr && stArr.k === "later" && stArr.at - arrive > 20) alerts.push(`<div class="alert warn">${esc(stArr.txt)}</div>`);
-  if (late > 15) alerts.push(`<div class="alert warn">En retard de ${late} min · passer à la suite ?</div>`);
+  const end = s.t + (s.dur || 60);
+  if (late > 15 && !here) alerts.push(c.lmin <= end
+    ? `<div class="alert warn">Prévu ${s.at}–${fmtMin(end)} : déjà sur place ? Touchez « Fait ».</div>`
+    : `<div class="alert warn">En retard de ${durTxt(late)} · passer à la suite ?</div>`);
   return `<div class="card pad next">
     <div class="when">${here ? "Vous y êtes" : "Ensuite · " + s.at}</div>
     <div class="row" style="margin-top:6px">${smallShape(p.cat === "base" ? "base" : p.cat, false)}<h3 class="grow" style="margin:0">${esc(s.id === "base" ? "Auberge : déposer les sacs" : p.name)}</h3>
       ${p.price != null ? `<span class="price num">${euro(p.price)}</span>` : ""}</div>
     ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
     ${s.note ? `<p class="why"><b>${esc(s.note)}</b></p>` : ""}
-    <div class="meta row">${icon("walk", "i s")}<span class="grow">${w} min ${me ? "depuis vous" : "depuis l'auberge"}${!here && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
+    <div class="meta row">${icon("walk", "i s")}<span class="grow">${w} min ${esc(org.label)}${!here && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
     ${alerts.join("")}
     <div class="btns"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="stepDone" data-day="${day}" data-id="${s.id}">${icon("check")} Fait</button>
@@ -576,7 +603,7 @@ function todayDay(c) {
   const day = c.day.id;
   const pr = dayProgress(day);
   const s = nextStep(day, c.lmin);
-  const tonight = PLACES.filter(p => p.cat === "party" && p.date === day).map(p => ({ p, st: hoursState(p, day, c.lmin) }))
+  const tonight = PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).map(p => ({ p, st: hoursState(p, day, c.lmin) }))
     .filter(x => x.st.k !== "closed").sort((a, b) => (tmin(a.p.start) || 0) - (tmin(b.p.start) || 0) || (a.p.price ?? 99) - (b.p.price ?? 99));
   const tonightHTML = `<div class="sec"><h2>Ce soir (${tonight.length}) <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
     ${tonight.length ? `<div class="carousel">${tonight.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>
@@ -588,7 +615,7 @@ function todayDay(c) {
   const home = BASE, wHome = walkMin(dist(from(), home));
   const late = c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
   const homeCard = late ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer</div>
-      <h3>Auberge · ${wHome} min à pied</h3><p class="why">Bus de nuit 5,70 € (N81–N93) si vous êtes loin. Ferry F3 toute la nuit depuis Noord.</p>
+      <h3>${me ? `Auberge · ${wHome} min à pied` : "Auberge · Warmoesstraat 129"}</h3><p class="why">${me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}Bus de nuit 5,70 € (N81–N93) si vous êtes loin. Ferry F3 toute la nuit depuis Noord.</p>
       <div class="btns"><a class="btn primary" href="${navUrl({ ...home, name: "Warmoesstraat 129" })}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
       <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">Bus de nuit</a></div></div></div>` : "";
   return `${statusLine(c)}
@@ -603,17 +630,17 @@ function todayDay(c) {
     ${openNow.length ? `<div class="list">${openNow.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>`
       : `<p class="empty">Aucun bar ni resto aux horaires connus n'est ouvert à moins de 15 min.</p>`}</div>
   <div class="sec"><h2>Près de vous</h2>${essGrid()}</div>
-  <div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})</summary>
+  <div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})${icon("chev", "i s chev")}</summary>
     <div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: c.lmin })).join("")}</div></details></div>
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
 function todayLeave(c) {
-  const trains = ["03:46", "04:46", "05:05", "05:18", "05:29", "05:49"];
+  const trains = ["03:46", "04:46", "05:05", "05:18", "05:29", "05:49"].filter(t => +t.slice(0, 2) * 60 + +t.slice(3) >= c.a.min);
   const items = ["Pièce d'identité et cartes bancaires", "Chargeurs et batterie externe", "Casier de l'auberge vidé, cadenas repris", "Carte-clé rendue à la réception (départ avant 11:00)", "Billet de train ou d'avion dans le téléphone"];
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1>Départ</h1><p>Samedi 31 octobre · Centraal à 7 min à pied</p></div>${xxx({ voir: true, manger: true, sortir: true })}</div>
   <div class="sec"><div class="card pad next"><div class="when">Trains Centraal → Schiphol (prévus)</div>
-    <p class="num" style="font-size:var(--fs-lg);font-weight:700;margin:8px 0">${trains.join(" · ")}</p>
+    <p class="num" style="font-size:var(--fs-lg);font-weight:700;margin:8px 0">${trains.length ? trains.join(" · ") : "Un train toutes les 10 à 15 min"}</p>
     <p class="why">13 à 17 min de trajet. Schiphol demande 2 h d'avance pour un vol Schengen. Vérifiez dans l'appli NS. Badgez votre carte au portique.</p>
     <div class="btns"><a class="btn primary" href="https://www.google.com/maps/dir/?api=1&destination=52.3791,4.9003&travelmode=walking" target="_blank" rel="noopener">${icon("walk")} Vers Centraal</a></div></div></div>
   <div class="sec"><h2>Avant de fermer la porte</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
@@ -644,7 +671,7 @@ function renderPlan() {
     <div class="btns"><button type="button" class="btn" data-act="mapDay" data-day="${day}">${icon("map")} Voir le parcours</button>
     <button type="button" class="btn" data-act="sharePlan" data-day="${day}">${icon("share")} Partager</button></div></div>
   <div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
-    <div class="carousel">${PLACES.filter(p => p.cat === "party" && p.date === day).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>
+    <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>
   <div class="sec"><h2>Aussi dans le coin (${others.length})</h2><div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: 18 * 60 })).join("")}</div>
     <p class="xs muted" style="margin:6px 0 0">Les horaires affichés dans cette liste sont ceux de 18:00 ce jour-là.</p></div>
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
@@ -741,12 +768,21 @@ let map = null, mapReady = false, markersLayer = null, essLayer = null, routeLay
 function initMap() {
   if (map) return;
   map = L.map("map", { zoomControl: false, attributionControl: true }).setView([BASE.lat, BASE.lon], 14);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: true, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
   markersLayer = L.layerGroup().addTo(map);
   essLayer = L.layerGroup().addTo(map);
   routeLayer = L.layerGroup().addTo(map);
   map.on("dragstart", () => { if (follow) { follow = false; updateLocBtn(); } });
   mapReady = true;
+  if (me) drawMe(true);
+}
+function drawMe(center) {
+  if (!mapReady || !me) return;
+  if (!meMarker) {
+    meCircle = L.circle([me.lat, me.lon], { radius: me.acc, color: "#1F6FEB", weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
+    meMarker = L.marker([me.lat, me.lon], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, zIndexOffset: 3000 }).addTo(map);
+  } else { meMarker.setLatLng([me.lat, me.lon]); meCircle.setLatLng([me.lat, me.lon]).setRadius(me.acc); }
+  if (center) map.setView([me.lat, me.lon], center === true ? Math.max(map.getZoom(), 16) : map.getZoom());
 }
 function mapFilterDay() {
   const c = clock();
@@ -754,16 +790,26 @@ function mapFilterDay() {
   if (state.mapFilter.startsWith("d:")) return state.mapFilter.slice(2);
   return null;
 }
-function drawMarkers() {
+let markerSig = "";
+const cluster = () => (L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius: 36, disableClusteringAtZoom: 17, showCoverageOnHover: false, spiderfyOnMaxZoom: true,
+  iconCreateFunction: g => L.divIcon({ className: "", html: `<div class="clu">${g.getChildCount()}</div>`, iconSize: [44, 44], iconAnchor: [22, 22] }) }) : L.layerGroup());
+function drawMarkers(force = false) {
   if (!mapReady) return;
-  markersLayer.clearLayers(); routeLayer.clearLayers(); essLayer.clearLayers();
   const day = mapFilterDay();
+  const c0 = clock();
+  const sig = JSON.stringify([state.checked, state.mapFilter, state.layers, state.hideDone, selMarker, day, c0.day && c0.day.id, document.documentElement.dataset.theme || ""]);
+  if (!force && sig === markerSig) return;
+  markerSig = sig;
+  markersLayer.clearLayers(); routeLayer.clearLayers(); essLayer.clearLayers();
+  const grp = day ? markersLayer : cluster();
+  if (!day) markersLayer.addLayer(grp);
   const add = (p, opts = {}) => {
     const done = p.cat !== "base" && isDone(opts.key || p.id);
     const html = `<div class="pin${selMarker === p.id ? " sel" : ""}">${shapeSVG(p.cat, { done, num: opts.num })}</div>`;
     const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html, iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: true, title: p.name, zIndexOffset: p.cat === "base" ? 1000 : selMarker === p.id ? 2000 : 0 });
     m.on("click", () => placeSheet(p.id));
-    m.addTo(markersLayer);
+    m.on("add", () => { const el = m.getElement(); if (el) el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); placeSheet(p.id); } }); });
+    m.addTo(p.cat === "base" ? markersLayer : grp);
   };
   add({ ...BASEP, cat: "base" });
   if (day) {
@@ -780,12 +826,14 @@ function drawMarkers() {
       add(p);
     }
   }
+  const essGrp = cluster();
+  essLayer.addLayer(essGrp);
   for (const [k, v] of Object.entries(ESSDEF)) {
     if (!state.layers[k]) continue;
     for (const x of essList(k)) {
-      const html = `<div class="pin-ess" style="width:24px;height:24px;border-radius:50%;background:var(--pin-ess);border:2px solid #fff;box-shadow:0 0 0 1.5px #1A1714;display:grid;place-items:center;color:#1A1714"><svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${v.icon}"/></svg></div>`;
-      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html, iconSize: [24, 24], iconAnchor: [12, 12] }), title: x.e[2] || v.one })
-        .on("click", () => openEss(k)).addTo(essLayer);
+      const html = `<div style="width:44px;height:44px;display:grid;place-items:center"><div class="pin-ess" style="width:24px;height:24px;border-radius:50%;background:var(--pin-ess);border:2px solid #fff;box-shadow:0 0 0 1.5px #1A1714;display:grid;place-items:center;color:#1A1714"><svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${v.icon}"/></svg></div></div>`;
+      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html, iconSize: [44, 44], iconAnchor: [22, 22] }), title: x.e[2] || v.one })
+        .on("click", () => openEss(k)).addTo(essGrp);
     }
   }
 }
@@ -796,15 +844,17 @@ function renderMapChrome() {
   const s = c.phase === "day" ? nextStep(c.day.id, c.lmin) : null;
   const ess = Object.entries(ESSDEF).map(([k, v]) => { const n = nearest(k, 1)[0]; return `<button type="button" class="chip" data-act="ess" data-type="${k}">${icon(v.icon, "i s")} ${n ? walkMin(n.d) + "′" : ""}</button>`; }).join("");
   $("#mapPeek").innerHTML = `<div class="handle"></div>
-    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(s.id === "base" ? "Auberge" : s.p.name)}</span></span><span class="pr num">${walkFrom(s.p)} min</span></button>` : ""}
+    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(s.id === "base" ? "Auberge" : s.p.name)}</span></span><span class="pr num">${s.p.lat != null ? walkMin(dist(originFor(c.day.id, s, c.lmin).o, s.p)) + " min" : ""}</span></button>` : ""}
     <div class="chips" style="margin:8px 0 0;padding:0">${ess}</div>`;
   document.documentElement.style.setProperty("--peek", ($("#mapPeek").offsetHeight || 120) + "px");
 }
 function renderMap() {
+  const first = !mapReady;
   initMap();
   renderMapChrome();
   drawMarkers();
   setTimeout(() => map.invalidateSize(), 60);
+  if (first) fitFilter();
   if (!state.mapSeen) { state.mapSeen = true; save(); }
 }
 function layersSheet() {
@@ -839,13 +889,8 @@ function onPos(pos) {
   const first = !me;
   me = { lat, lon, acc };
   if (!state.gpsTested) { state.gpsTested = true; save(); }
-  if (mapReady) {
-    if (!meMarker) {
-      meCircle = L.circle([lat, lon], { radius: acc, color: "#1F6FEB", weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
-      meMarker = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, zIndexOffset: 3000 }).addTo(map);
-    } else { meMarker.setLatLng([lat, lon]); meCircle.setLatLng([lat, lon]).setRadius(acc); }
-    if (first || follow) map.setView([lat, lon], first ? 16 : map.getZoom());
-  }
+  drawMe(follow ? "keep" : false);
+  if (first && mapReady && $("#s-map").classList.contains("active") && !mapFilterDay()) drawMe(true);
   if (acc <= 100) autoCheck(lat, lon, acc);
   if (Date.now() - lastRender > 15000) { lastRender = Date.now(); renderActive(); }
 }
@@ -854,22 +899,31 @@ function onPosErr(e) {
   toast(msg);
   if (e.code === 1) stopGps();
 }
+// Jour où un lieu est une étape du plan
+const PLAN_DAY = {};
+for (const d in PLAN) for (const s of PLAN[d]) PLAN_DAY[s.id] = d;
 function autoCheck(lat, lon, acc) {
   const c = clock();
-  const t = Date.now();
-  for (const p of PLACES) {
-    if (p.lat == null || isDone(p.id)) continue;
-    if (p.cat === "party" && !(c.phase === "day" && (p.date === c.day.id || p.date === "all"))) continue;
-    const d = dist({ lat, lon }, p);
-    if (d <= state.radius + Math.min(acc, 30)) {
-      inside[p.id] = inside[p.id] || t;
-      if (t - inside[p.id] >= state.dwell * 1000) {
-        state.checked[p.id] = t; save();
-        toast(`Visité : ${p.name}`, { undo: p.id });
-        if (navigator.vibrate) navigator.vibrate([10, 40, 10]);
-        renderActive();
-      }
-    } else delete inside[p.id];
+  if (c.phase !== "day") return;
+  const here = { lat, lon }, r = state.radius + Math.min(acc, 30), t = Date.now(), day = c.day.id;
+  const step = id => plan(day).find(s => s.id === id);
+  // Candidats : étapes d'aujourd'hui, ou lieux hors plan ; jamais une étape d'un autre jour (coche manuelle)
+  const near = PLACES.filter(p => p.lat != null && dist(here, p) <= r
+      && (p.cat !== "party" || p.date === day || p.date === "all")
+      && (!PLAN_DAY[p.id] || PLAN_DAY[p.id] === day))
+    .sort((a, b) => !!step(b.id) - !!step(a.id) || dist(here, a) - dist(here, b));
+  for (const id in inside) if (!near.some(p => p.id === id)) delete inside[id]; // sorti du rayon : réarmé
+  const p = near[0];
+  if (!p || isDone(p.id)) return;
+  const s = step(p.id);
+  // Au pied de l'auberge (Belushi's) : seulement comme étape du jour, à partir d'1 h avant
+  if (dist(BASE, p) < 60 && !(s && c.lmin >= s.t - 60)) return;
+  inside[p.id] = inside[p.id] || t;
+  if (t - inside[p.id] >= state.dwell * 1000) {
+    state.checked[p.id] = t; save();
+    toast(`Visité : ${p.name}`, { undo: p.id });
+    if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([10, 40, 10]);
+    renderActive();
   }
 }
 document.addEventListener("visibilitychange", () => {
@@ -890,7 +944,8 @@ function onboard(step = 1) {
       <p>Le plan de chaque jour, les bars pas chers, les soirées, la carte et la coche automatique par GPS.</p>
       <p><b>Pour l'installer :</b></p>
       <ol>${ios ? "<li>Dans Safari, touchez Partager (le carré avec une flèche).</li><li>Choisissez « Sur l'écran d'accueil », puis Ajouter.</li>" : "<li>Touchez ⋮ en haut à droite de Chrome.</li><li>Choisissez « Installer l'application ».</li>"}</ol></div>
-      <button type="button" class="btn primary" data-act="ob2">Continuer</button>`;
+      <button type="button" class="btn primary" data-act="ob2">Continuer</button>
+      <button type="button" class="btn" style="margin-top:8px" data-act="obDone">Passer</button>`;
   } else {
     ob.innerHTML = `<div class="ob">${icon("loc")}<h1 id="obTitle">Cocher les lieux tout seul</h1>
       <p>Quand vous restez 1 minute à moins de 40 m d'un lieu, l'appli le coche. Votre position reste sur ce téléphone : rien n'est envoyé.</p>
@@ -904,12 +959,13 @@ function onboard(step = 1) {
 
 // ───────────── Toast ─────────────
 let toastT = null;
-function toast(msg, { undo = null, action = null } = {}) {
+function toast(msg, { undo = null, action = null, low = false } = {}) {
   const t = $("#toast");
-  t.innerHTML = esc(msg) + (undo ? `<button type="button" data-act="undo" data-id="${undo}">Annuler</button>` : "") + (action ? `<button type="button" data-act="${action.act}">${esc(action.label)}</button>` : "");
+  if (low && t.classList.contains("on") && t.querySelector("button")) return; // ne jamais écraser un message avec Annuler
+  t.innerHTML = esc(msg) + (undo ? `<button type="button" data-act="undo" data-id="${esc(undo)}">Annuler</button>` : "") + (action ? `<button type="button" data-act="${action.act}"${action.id ? ` data-id="${esc(action.id)}"` : ""}>${esc(action.label)}</button>` : "");
   t.classList.add("on");
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.classList.remove("on"), action ? 9000 : 4000);
+  toastT = setTimeout(() => t.classList.remove("on"), action || undo ? 8000 : 4000);
 }
 
 // ───────────── Navigation ─────────────
@@ -920,7 +976,15 @@ function show(id) {
   renderScreen(id);
   if (id !== "s-map") $("#" + id).scrollTop = 0;
 }
+function dayRollover() {
+  const c = clock();
+  if (state.selOn === c.logical) return;
+  state.selOn = c.logical;
+  if (c.phase === "day") { state.progDay = null; state.listDay = null; }
+  save();
+}
 function renderScreen(id) {
+  dayRollover();
   if (id === "s-today") renderToday();
   else if (id === "s-map") renderMap();
   else if (id === "s-places") renderPlaces();
@@ -931,7 +995,12 @@ function renderActive() {
   const id = activeScreen();
   const el = $("#" + id);
   const y = el.scrollTop;
+  const det = $$("details", el).map(d => d.open), car = $$(".carousel", el).map(c => c.scrollLeft);
+  const hr = $("#hourly"), hourlyOpen = !!(hr && !hr.hidden && el.contains(hr));
   renderScreen(id);
+  $$("details", el).forEach((d, i) => { if (det[i]) d.open = true; });
+  $$(".carousel", el).forEach((c, i) => { c.scrollLeft = car[i] || 0; });
+  if (hourlyOpen && $("#hourly")) { $("#hourly").hidden = false; $("#hourly").innerHTML = hourlyHTML(); }
   if (id !== "s-map") el.scrollTop = y;
   updateBadge();
 }
@@ -947,7 +1016,7 @@ $$("nav.tabs button").forEach(b => b.addEventListener("click", () => show(b.data
 // ───────────── Actions (délégation) ─────────────
 function toggleDone(id, val) {
   const on = val ?? !isDone(id);
-  if (on) state.checked[id] = Date.now(); else delete state.checked[id];
+  if (on) state.checked[id] = Date.now(); else { delete state.checked[id]; inside[id] = Infinity; } // pas de re-coche avant d'être sorti du rayon
   save();
   if (on && navigator.vibrate) navigator.vibrate(10);
 }
@@ -966,15 +1035,25 @@ document.addEventListener("click", e => {
     case "tab": closeSheet(); show(el.dataset.s); break;
     case "day": state.progDay = el.dataset.day; save(); closeSheet(); show("s-plan"); break;
     case "stepDone": {
-      const day = el.dataset.day, s = (PLAN[day] || []).find(x => x.id === id);
-      toggleDone(stepKey(s, day)); renderActive(); break;
+      const day = el.dataset.day, s = (PLAN[day] || []).find(x => x.id === id), k = stepKey(s, day);
+      toggleDone(k); renderActive();
+      if (isDone(k) && el.closest(".next")) toast(`Fait : ${s.id === "base" ? "l'auberge" : BYID[s.id].name}`, { undo: k });
+      break;
     }
     case "stepSkip": {
-      const k = el.dataset.day + ":" + id;
-      if (state.skipped[k]) delete state.skipped[k]; else state.skipped[k] = true;
-      save(); renderActive(); break;
+      const day = el.dataset.day, k = day + ":" + id, s = plan(day).find(x => x.id === id), c = clock();
+      const lmin = c.phase === "day" && c.day.id === day ? c.lmin : null;
+      const shownSkipped = state.skipped[k] === true || (!isDone(stepKey(s, day)) && missed(s, lmin, day));
+      state.skipped[k] = !shownSkipped;
+      save(); renderActive();
+      if (!shownSkipped && el.closest(".next")) toast("Étape passée", { undo: k });
+      break;
     }
-    case "undo": delete state.checked[id]; save(); $("#toast").classList.remove("on"); renderActive(); break;
+    case "undo":
+      if (id.includes(":")) delete state.skipped[id];
+      else { delete state.checked[id]; inside[id] = Infinity; }
+      save(); $("#toast").classList.remove("on"); renderActive(); break;
+    case "unck": delete state.ck[id]; save(); $("#toast").classList.remove("on"); renderActive(); break;
     case "share": { const p = BYID[id]; share(`${p.name} — ${p.why || ""}`, navUrl(p)); break; }
     case "sharePlan": {
       const day = el.dataset.day;
@@ -1023,8 +1102,18 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
-  if (el.dataset.act === "toggleDone") { toggleDone(el.dataset.id, el.checked); drawMarkers(); renderActive(); return; }
-  if (el.dataset.act === "ck") { if (el.checked) state.ck[el.dataset.id] = true; else delete state.ck[el.dataset.id]; save(); setTimeout(renderActive, 150); return; }
+  if (el.dataset.act === "toggleDone") {
+    toggleDone(el.dataset.id, el.checked);
+    const h = $("#sheetHead .shape"), p = BYID[el.dataset.id];
+    if (h && p) h.outerHTML = smallShape(p.cat, el.checked);
+    drawMarkers(); renderActive(); return;
+  }
+  if (el.dataset.act === "ck") {
+    const id = el.dataset.id;
+    if (el.checked) { state.ck[id] = true; const it = CHECKLIST.find(x => x.id === id); if (it) toast("Coché : " + it.txt.slice(0, 40) + (it.txt.length > 40 ? "…" : ""), { action: { act: "unck", label: "Annuler", id } }); }
+    else delete state.ck[id];
+    save(); setTimeout(renderActive, 150); return;
+  }
   if (el.dataset.layer) { state.layers[el.dataset.layer] = el.checked; save(); drawMarkers(); return; }
   if (el.dataset.set) {
     const k = el.dataset.set;
@@ -1043,7 +1132,8 @@ function fitFilter() {
     map.invalidateSize();
     if (day) {
       const pts = [[BASE.lat, BASE.lon], ...plan(day).filter(s => s.p.lat != null).map(s => [s.p.lat, s.p.lon])];
-      map.fitBounds(L.latLngBounds(pts).pad(0.15), { paddingBottomRight: [0, 120] });
+      const peekH = $("#mapPeek").offsetHeight || 120;
+      map.fitBounds(L.latLngBounds(pts).pad(0.1), { paddingTopLeft: [16, 64], paddingBottomRight: [64, peekH + 16] });
     }
   }, 80);
 }
@@ -1057,16 +1147,20 @@ $("#btnLocate").addEventListener("click", () => {
 });
 
 // ───────────── Réseau et service worker ─────────────
-function netState() { document.body.classList.toggle("is-offline", !navigator.onLine); }
+function netState() {
+  document.body.classList.toggle("is-offline", !navigator.onLine);
+  $("#offlineBar").textContent = "Hors ligne · plan et lieux disponibles · carte : zones déjà vues" + (state.wx ? " · météo de " + hhmm(new Date(state.wx.ts)) : "");
+}
 window.addEventListener("online", () => { netState(); loadWeather(true); });
 window.addEventListener("offline", netState);
 if ("serviceWorker" in navigator && window.isSecureContext) {
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(reg => {
     reg.addEventListener("updatefound", () => {
       const w = reg.installing;
       w && w.addEventListener("statechange", () => {
-        if (w.state === "installed" && navigator.serviceWorker.controller) toast("Nouvelle version des données", { action: { act: "reload", label: "Recharger" } });
-        else if (w.state === "activated" && !navigator.serviceWorker.controller) toast("Prête hors ligne");
+        if (w.state === "installed" && hadController) toast("Nouvelle version des données", { action: { act: "reload", label: "Recharger" } });
+        else if (w.state === "activated" && !hadController) toast("Prête hors ligne", { low: true });
       });
     });
   }).catch(() => {});

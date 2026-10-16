@@ -1,9 +1,11 @@
 // Hors ligne : l'appli (coquille + données) est servie depuis le cache puis rafraîchie en arrière-plan.
 // Tuiles OSM : seulement celles déjà affichées (aucun préchargement, politique d'OSM), 800 au plus.
-const VERSION = "ams-v2-2026-10-15";
+const VERSION = "ams-v2-2026-10-16";
 const SHELL = ["./", "index.html", "app.css", "app.js", "data.js", "ess.js", "manifest.json", "icon.svg", "icon-192.png", "icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"];
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"];
 const TILES = "ams-tiles", FONTS = "ams-fonts", MAX_TILES = 800;
 
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
