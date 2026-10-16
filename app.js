@@ -6,7 +6,14 @@ const TZ = "Europe/Amsterdam";
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const icon = (n, cls = "i") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const MS = { sun: "sunny", moon: "bedtime", map: "map", list: "format_list_bulleted", cal: "calendar_month", info: "info", beer: "sports_bar", fork: "restaurant",
+  music: "nightlife", cols: "museum", wc: "wc", euro: "local_atm", cart: "shopping_cart", plus: "local_pharmacy", loc: "my_location", follow: "navigation",
+  layers: "layers", close: "close", check: "check", share: "share", walk: "directions_walk", go: "directions", rain: "rainy", cloud: "cloud",
+  pcloud: "partly_cloudy_day", fog: "foggy", storm: "thunderstorm", snow: "weather_snowy", clock: "schedule", ticket: "confirmation_number",
+  alert: "warning", chev: "chevron_right", home: "home", ferry: "directions_boat", phone: "call", doc: "description", up: "keyboard_arrow_up",
+  down: "keyboard_arrow_down", skip: "skip_next", sunset: "wb_twilight", bike: "directions_bike", tram: "tram", subway: "subway", bus: "directions_bus",
+  train: "train", copy: "content_copy", ext: "open_in_new", note: "edit_note", sure: "verified", maybe: "history", unsure: "help" };
+const icon = (n, cls = "i") => `<span class="ms${cls.replace(/^i\b/, "")}" aria-hidden="true">${MS[n] || n}</span>`;
 const params = new URLSearchParams(location.search);
 const FAKE_NOW = params.get("now"); // pour tester : ?now=2026-10-28T18:05:00%2B01:00
 const now = () => (FAKE_NOW ? new Date(FAKE_NOW) : new Date());
@@ -80,6 +87,7 @@ function applyTheme() {
   const r = document.documentElement;
   if (state.theme === "system") r.removeAttribute("data-theme"); else r.dataset.theme = state.theme;
   if (state.text === "large") r.dataset.text = "large"; else r.removeAttribute("data-text");
+  for (const m of $$('meta[name="theme-color"]')) { if (!m.dataset.media) m.dataset.media = m.media; m.media = state.theme === "system" ? m.dataset.media : (m.content === "#10131a") === (state.theme === "dark") ? "all" : "not all"; }
   if (typeof drawMarkers === "function" && mapReady) drawMarkers(true); // la couleur du parcours vient du thème
 }
 
@@ -137,8 +145,8 @@ const stateTag = st => {
 };
 
 // ───────────── Badges, formes ─────────────
-const confBadge = c => !c ? "" : c === "sûr" ? `<span class="conf s" title="source récente et précise">✓ sûr</span>`
-  : c === "probable" ? `<span class="conf p" title="source ancienne ou indirecte">≈ probable</span>` : `<span class="conf v" title="sources en désaccord ou absentes">? à vérifier</span>`;
+const confBadge = c => !c ? "" : c === "sûr" ? `<span class="conf s" title="source récente et précise">${icon("sure")}sûr</span>`
+  : c === "probable" ? `<span class="conf p" title="source ancienne ou indirecte">${icon("maybe")}probable</span>` : `<span class="conf v" title="sources en désaccord ou absentes">${icon("unsure")}à vérifier</span>`;
 const SHAPES = {
   visit: '<path d="M3 12 14 2l11 10v13H3Z"/>',
   food: '<circle cx="14" cy="14" r="12"/>',
@@ -146,19 +154,14 @@ const SHAPES = {
   party: '<path d="M14 1.5 26.5 14 14 26.5 1.5 14Z"/>',
   base: '<path d="M1 13 14 1l13 12v14H1Z"/>',
 };
-function shapeSVG(cat, { done = false, num = null, size = 28 } = {}) {
-  const k = cat === "base" ? "base" : cat;
-  const fill = cat === "base" ? "var(--brand)" : done ? "var(--pin-done)" : `var(--pin-${cat})`;
-  const ink = cat === "base" ? "#fff" : done ? "var(--pin-done-ink)" : `var(--pin-${cat}-ink)`;
-  const glyph = num != null
-    ? `<text x="14" y="${cat === "visit" ? 20 : 18.6}" text-anchor="middle" font-size="13" font-weight="700" font-family="IBM Plex Sans,system-ui,sans-serif" style="fill:${ink}">${num}</text>`
-    : done ? `<path d="m8.5 14.5 4 4 7-8" style="stroke:${ink}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<use href="#i-${cat === "base" ? "home" : CATS[cat].glyph}" x="7" y="${cat === "visit" ? 9 : 7}" width="14" height="14" style="color:${ink}" stroke="currentColor" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
-  return `<svg viewBox="-8 -8 44 44" width="${size + 16}" height="${size + 16}" aria-hidden="true">
-    <g style="stroke:var(--pin-stroke-out,#1A1714)" stroke-width="5" fill="none">${SHAPES[k]}</g>
-    <g stroke="#fff" stroke-width="2.5" style="fill:${fill}">${SHAPES[k]}</g>${glyph}</svg>`;
+const PIN_PATH = "M16 41C14.6 34.6 1 27.4 1 16a15 15 0 0 1 30 0c0 11.4-13.6 18.6-15 25Z";
+const glyphOf = (cat, done) => (cat === "base" ? "home" : done ? "check" : MS[CATS[cat].glyph]);
+function pinHTML(cat, { done = false, num = null, sel = false } = {}) {
+  if (cat === "base") return `<div class="pin pin-base${sel ? " sel" : ""}"><span class="ms">home</span></div>`;
+  const g = num != null ? `<b class="pin-n">${num}</b>` : `<span class="ms">${glyphOf(cat, done)}</span>`;
+  return `<div class="pin${done ? " done" : ""}${sel ? " sel" : ""}" data-cat="${cat}"><svg viewBox="0 0 32 42" aria-hidden="true"><path d="${PIN_PATH}"/></svg>${g}</div>`;
 }
-const smallShape = (cat, done) => `<span class="shape" aria-hidden="true">${shapeSVG(cat, { done, size: 12 }).replace('width="28" height="28"', "")}</span>`;
+const smallShape = (cat, done) => `<span class="shape${done ? " done" : ""}" data-cat="${cat}" aria-hidden="true"><span class="ms">${glyphOf(cat, done)}</span></span>`;
 
 // ───────────── Plan ─────────────
 const stepKey = (s, day) => (s.id === "base" ? "base-" + day : s.id);
@@ -409,10 +412,10 @@ function placeSheet(id) {
   const src = (p.src || []).map(s => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)} <span class="muted">(${esc(s.d)})</span></a>`).join("");
   const dist0 = p.lat != null ? dist(from(), p) : null;
   const content = `
-    <div class="btns" style="margin-top:0">
+    <div class="btns lg" style="margin-top:0">
       <a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       ${p.cat !== "base" ? `<label class="switch"><input type="checkbox" switch data-act="toggleDone" data-id="${id}" ${done ? "checked" : ""}> Fait</label>` : ""}
-      <button type="button" class="btn" data-act="share" data-id="${id}" aria-label="Partager">${icon("share")}</button>
+      <button type="button" class="btn icon" data-act="share" data-id="${id}" aria-label="Partager">${icon("share")}</button>
     </div>
     ${p.url ? `<div class="btns"><a class="btn" href="${esc(p.url)}" target="_blank" rel="noopener">${icon("ticket")} Billets et programme</a></div>` : ""}
     ${p.book && p.book.url ? `<div class="btns"><a class="btn" href="${esc(p.book.url)}" target="_blank" rel="noopener">${icon("ticket")} Réserver</a></div>` : ""}
@@ -458,6 +461,15 @@ function placeRow(p, { dayId = null, lmin = 0, showDay = false } = {}) {
     <span class="pr num">${priceTxt}</span></button>`;
 }
 
+// ───────────── Transports du jour ─────────────
+const MODE = { walk: ["walk", "À pied"], tram: ["tram", "Tram"], ferry: ["ferry", "Ferry"], bus: ["bus", "Bus de nuit"], bike: ["bike", "Vélo"] };
+const modeChips = m => m.modes.map(k => `<span class="mode">${icon(MODE[k][0], "i s")}${MODE[k][1]}</span>`).join("");
+function moveCard(d, { home = true } = {}) {
+  const m = d.move;
+  if (!m) return "";
+  return `<div class="card pad move"><div class="mhead">${modeChips(m)}<span class="grow"></span><span class="num kmc">${String(m.km).replace(".", ",")} km · ${esc(m.cost)}</span></div>
+    <p>${esc(m.txt)}</p>${home ? `<p class="ret">${icon(m.home.m === "bus" ? "bus" : "home", "i s")}<span><b>Retour de nuit :</b> ${esc(m.home.t)}</span></p>` : ""}</div>`;
+}
 function timeline(day, { lmin = null, controls = false } = {}) {
   const steps = plan(day);
   const sun = tmin(SUN[day][1]);
@@ -465,14 +477,14 @@ function timeline(day, { lmin = null, controls = false } = {}) {
   let html = `<ol class="tl">`, sunDone = false, prev = BASE;
   for (const s of steps) {
     if (!sunDone && s.t > sun) {
-      html += `<li class="sun"><span class="time num">${SUN[day][1]}</span><span class="rail"><span class="dot"></span></span><div class="body">${icon("moon", "i s")} coucher du soleil</div></li>`;
+      html += `<li class="sun"><span class="time num">${SUN[day][1]}</span><span class="rail"><span class="dot"></span></span><div class="body">${icon("sunset", "i s")} coucher du soleil</div></li>`;
       sunDone = true;
     }
     const k = stepKey(s, day), done = isDone(k), skipped = isSkipped(day, s) || (!done && missed(s, lmin, day));
     const w = prev && s.p.lat != null ? walkMin(dist(prev, s.p)) : null;
     const cls = [done ? "done" : "", skipped ? "skipped" : "", nx && nx.id === s.id && lmin != null ? "isnext" : ""].join(" ");
     html += `<li class="${cls}"><span class="time num">${s.at}</span><span class="rail"><span class="dot"></span></span><div class="body">
-      ${s.via ? `<div class="walk">${icon("ferry", "i s")} ${esc(s.via)}</div>` : w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied</div>` : ""}
+      ${s.via ? `<div class="walk">${icon(s.vm || "ferry", "i s")} ${esc(s.via)}</div>` : w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied${s.alt ? ` · ${esc(s.alt)}` : ""}</div>` : ""}
       <button type="button" class="item" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat, done)}
         <span class="nm">${esc(s.id === "base" ? "Auberge : déposer les sacs" : s.p.name)}</span>
         <span class="num small" style="font-weight:700">${s.p.price != null ? euro(s.p.price) : ""}</span></button>
@@ -482,7 +494,9 @@ function timeline(day, { lmin = null, controls = false } = {}) {
       </div></li>`;
     if (s.p.lat != null) prev = s.p;
   }
-  if (!sunDone) html += `<li class="sun"><span class="time num">${SUN[day][1]}</span><span class="rail"><span class="dot"></span></span><div class="body">${icon("moon", "i s")} coucher du soleil</div></li>`;
+  if (!sunDone) html += `<li class="sun"><span class="time num">${SUN[day][1]}</span><span class="rail"><span class="dot"></span></span><div class="body">${icon("sunset", "i s")} coucher du soleil</div></li>`;
+  const mv = DAYBY[day].move;
+  if (mv) html += `<li class="ret"><span class="time num">fin</span><span class="rail"><span class="dot"></span></span><div class="body">${icon(mv.home.m === "bus" ? "bus" : "home", "i s")}<span><b>Retour :</b> ${esc(mv.home.t)}</span></div></li>`;
   return html + "</ol>";
 }
 
@@ -491,13 +505,13 @@ function statusLine(c) {
   const wx = state.wx && state.wx.d.current;
   const left = c.phase === "day" ? `${esc(c.day.long.split(" ")[0])} ${c.day.label.split(" ")[1]} oct. · Jour ${c.idx + 1}/4`
     : new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(now());
-  const w = wx && c.phase !== "before" ? `${icon(wmo(wx.weather_code)[0], "i s")} ${Math.round(wx.temperature_2m)}°` : "";
+  const w = wx && c.phase !== "before" ? `<span class="wxchip">${icon(wmo(wx.weather_code)[0], "i s")}${Math.round(wx.temperature_2m)}°</span>` : "";
   return `<div class="status"><span class="grow">${left}</span>${w}</div>`;
 }
 function renderToday() {
   const c = clock();
   const el = $("#s-today");
-  $("#todayIcon").setAttribute("href", c.a.h >= 18 || c.a.h < 7 ? "#i-moon" : "#i-sun");
+  $("#todayIcon").textContent = c.a.h >= 18 || c.a.h < 7 ? "bedtime" : "light_mode";
   if (c.phase === "before") el.innerHTML = todayBefore(c);
   else if (c.phase === "day") el.innerHTML = todayDay(c);
   else if (c.phase === "leave") el.innerHTML = todayLeave(c);
@@ -513,7 +527,7 @@ function dueBadge(due, today) {
 function ckRow(it, today) {
   const done = !!state.ck[it.id];
   return `<div class="ck${done ? " done" : ""}"><label class="cbx"><input type="checkbox" data-act="ck" data-id="${it.id}" ${done ? "checked" : ""} aria-label="Fait : ${esc(it.txt)}"></label>
-    ${it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.txt)} ↗</a>` : `<span class="t">${esc(it.txt)}</span>`}${done ? "" : dueBadge(it.due, today)}</div>`;
+    ${it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.txt)} ${icon("ext", "i s")}</a>` : `<span class="t">${esc(it.txt)}</span>`}${done ? "" : dueBadge(it.due, today)}</div>`;
 }
 function todayBefore(c) {
   const n = daysBetween(c.a.date, TRIP.start);
@@ -543,7 +557,7 @@ function todayBefore(c) {
     ${prep.map(x => `<div class="ck${x.ok ? " done" : ""}">${x.ok ? icon("check") : icon("chev")}<span class="t">${x.url ? `<a href="${x.url}" target="_blank" rel="noopener" data-act="guideRead">${esc(x.txt)}</a>` : `<button type="button" class="btn sm ghost" data-act="${x.act}" ${x.s ? `data-s="${x.s}"` : ""}>${esc(x.txt)}</button>`}</span></div>`).join("")}
   </div></div>
   <div class="sec"><h2>Vos 4 jours</h2><div class="list">
-    ${DAYS.map(d => { const pr = dayProgress(d.id); return `<button type="button" class="li" data-act="day" data-day="${d.id}">${icon("cal")}<span style="flex:1"><span class="nm">${d.label} · ${esc(d.theme)}</span><span class="sub">${esc(d.sub)}</span></span><span class="pr num">${pr.done}/${pr.total}</span></button>`; }).join("")}
+    ${DAYS.map(d => { const pr = dayProgress(d.id); return `<button type="button" class="li" data-act="day" data-day="${d.id}">${icon("cal")}<span style="flex:1"><span class="nm">${d.label} · ${esc(d.theme)}</span><span class="sub">${esc(d.sector || d.sub)}</span>${d.move ? `<span class="modes">${modeChips(d.move)}</span>` : ""}</span><span class="pr num">${pr.done}/${pr.total}</span></button>`; }).join("")}
   </div></div>
   <div class="sec"><a class="btn" style="width:100%" href="${TRIP.guide}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique (papiers, transports, règles, valise)</a></div>
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
@@ -567,21 +581,21 @@ function nextCard(c, s) {
     ? `<div class="alert warn">Prévu ${s.at}–${fmtMin(end)} : déjà sur place ? Touchez « Fait ».</div>`
     : `<div class="alert warn">En retard de ${durTxt(late)} · passer à la suite ?</div>`);
   return `<div class="card pad next">
-    <div class="when">${here ? "Vous y êtes" : "Ensuite · " + s.at}</div>
+    <div class="when">${icon(here ? "loc" : "clock", "i s")}${here ? "Vous y êtes" : "Ensuite · " + s.at}</div>
     <div class="row" style="margin-top:6px">${smallShape(p.cat === "base" ? "base" : p.cat, false)}<h3 class="grow" style="margin:0">${esc(s.id === "base" ? "Auberge : déposer les sacs" : p.name)}</h3>
       ${p.price != null ? `<span class="price num">${euro(p.price)}</span>` : ""}</div>
     ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
     ${s.note ? `<p class="why"><b>${esc(s.note)}</b></p>` : ""}
-    <div class="meta row">${icon(s.via ? "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : `${w} min ${esc(org.label)}`}${!here && !s.via && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
+    <div class="meta row">${icon(s.via ? s.vm || "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : `${w} min ${esc(org.label)}`}${!here && !s.via && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
     ${alerts.join("")}
-    <div class="btns"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
+    <div class="btns lg"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="stepDone" data-day="${day}" data-id="${s.id}">${icon("check")} Fait</button>
-      <button type="button" class="btn" data-act="stepSkip" data-day="${day}" data-id="${s.id}" aria-label="Passer">${icon("skip")}</button></div>
+      <button type="button" class="btn icon" data-act="stepSkip" data-day="${day}" data-id="${s.id}" aria-label="Passer">${icon("skip")}</button></div>
   </div>`;
 }
 function weatherStrip(c) {
   const sun = SUN[c.day.id][1];
-  if (!state.wx) return `<div class="card wx">${icon("moon", "i s")} Coucher du soleil ${sun}<span class="muted small">${navigator.onLine ? "Météo indisponible pour l'instant" : "Météo indisponible hors ligne"}</span></div>`;
+  if (!state.wx) return `<div class="card wx">${icon("sunset", "i s")} Coucher du soleil ${sun}<span class="muted small">${navigator.onLine ? "Météo indisponible pour l'instant" : "Météo indisponible hors ligne"}</span></div>`;
   const cur = state.wx.d.current;
   const hrs = wxHours(now().getTime(), 8);
   let maxp = null;
@@ -590,7 +604,7 @@ function weatherStrip(c) {
   return `<button type="button" class="card wx" data-act="hourly" style="width:100%;text-align:left;border:1px solid var(--line)">
     ${icon(ic)}<b class="num">${cur ? Math.round(cur.temperature_2m) + "°" : "—"}</b><span>${esc(lab)}</span>
     ${maxp ? `<span>${icon("rain", "i s")} ${maxp.pp} % vers ${hhmm(new Date(maxp.t)).slice(0, 2)} h</span>` : ""}
-    <span>${icon("moon", "i s")} ${sun}</span><span class="xs muted">${wxAge()}</span></button>
+    <span>${icon("sunset", "i s")} ${sun}</span><span class="xs muted">${wxAge()}</span></button>
     <div id="hourly" hidden></div>`;
 }
 function hourlyHTML() {
@@ -616,14 +630,15 @@ function todayDay(c) {
   const home = BASE, wHome = walkMin(dist(from(), home));
   const late = c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
   const homeCard = late ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer</div>
-      <h3>${me ? `Auberge · ${wHome} min à pied` : "Auberge · Warmoesstraat 129"}</h3><p class="why">${me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}Bus de nuit 5,70 € (N81–N93) si vous êtes loin. Ferry F3 toute la nuit depuis Noord.</p>
+      <h3>${me ? `Auberge · ${wHome} min à pied` : "Auberge · Warmoesstraat 129"}</h3><p class="why">${me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}${c.day.move ? esc(c.day.move.home.t) : "Ferry F3 toute la nuit depuis Noord."}</p>
       <div class="btns"><a class="btn primary" href="${navUrl({ ...home, name: "Warmoesstraat 129" })}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
-      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">Bus de nuit</a></div></div></div>` : "";
+      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} Bus de nuit</a></div></div></div>` : "";
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1>${esc(c.day.theme)}</h1><p>Jour ${c.idx + 1}/4 · ${pr.done}/${pr.total} étapes · ${esc(c.day.sub)}</p></div>${xxx(pr.kinds)}</div>
   ${homeCard}
   <div class="sec">${nextCard(c, s)}</div>
   <div class="sec">${weatherStrip(c)}</div>
+  <div class="sec"><h2>Se déplacer aujourd'hui</h2>${moveCard(c.day)}</div>
   ${c.lmin >= 22 * 60 ? tonightHTML : ""}
   <div class="sec"><h2>Le plan du jour <span class="grow"></span>${pr.done}/${pr.total}</h2><div class="card pad" style="padding-top:6px;padding-bottom:6px">${timeline(day, { lmin: c.lmin })}</div></div>
   ${c.lmin < 22 * 60 ? tonightHTML : ""}
@@ -667,7 +682,8 @@ function renderPlan() {
   const pr = dayProgress(day);
   $("#s-plan").innerHTML = `<div class="status"><span class="grow">Programme</span></div>
   <div class="sec" style="padding-top:0"><div class="seg" role="group" aria-label="Jour">${DAYS.map(x => `<button type="button" data-act="day" data-day="${x.id}" aria-pressed="${x.id === day}">${x.label}</button>`).join("")}</div></div>
-  <div class="sec"><h1 style="font-size:var(--fs-2xl);color:var(--brick)">${esc(d.theme)}</h1><p class="small muted" style="margin:4px 0 0">${esc(d.long)} · ${esc(d.sub)} · ${pr.done}/${pr.total} faits</p></div>
+  <div class="sec"><h1 class="dayh">${esc(d.theme)}</h1><p class="small muted" style="margin:4px 0 0">${esc(d.long)} · ${esc(d.sector || d.sub)} · ${pr.done}/${pr.total} faits</p></div>
+  <div class="sec" style="padding-top:8px">${moveCard(d, { home: false })}</div>
   <div class="sec"><div class="card pad">${timeline(day, { controls: true, lmin: c.phase === "day" && c.day.id === day ? c.lmin : null })}</div>
     <div class="btns"><button type="button" class="btn" data-act="mapDay" data-day="${day}">${icon("map")} Voir le parcours</button>
     <button type="button" class="btn" data-act="sharePlan" data-day="${day}">${icon("share")} Partager</button></div></div>
@@ -721,6 +737,15 @@ function renderPlaces() {
 }
 
 // ───────────── Écran Infos ─────────────
+const MOVE_RULES = [
+  ["walk", "Moins de 2 km : à pied", "Centre, Jordaan, canaux, Leidseplein, Rembrandtplein. En groupe, 1 km ≈ 15 min : ajoutez 10 à 20 % aux temps des applis. Pas de tram pour 1 ou 2 arrêts."],
+  ["tram", "2,5 à 4 km de jour : tram, métro ou bus", "Museumplein, De Pijp, Ouest, Oost : 20 à 35 min porte à porte, environ 1,60–1,80 € le trajet. Chacun badge sa carte sans contact <b>à la montée et à la descente</b>, toujours la même : plafond GVB Max 10,50 €/jour."],
+  ["ferry", "Noord : ferry gratuit", "Derrière Centraal, sans badge. F3 (Buiksloterweg) 24 h/24, toutes les 12 min la nuit. Dernier F4 depuis NDSM à 02:00, 03:30 la nuit de vendredi."],
+  ["bus", "La nuit : à pied ou bus de nuit", "Plus de tram ni métro après 00:30–00:50. Nuits de mardi et mercredi : seulement N85 et N87 (Rembrandtplein → Dam). Nuits de jeudi et vendredi : N81 à N93, environ 1 par heure, 5,70 €."],
+  ["bike", "Vélo : l'après-midi seulement", "Utile pour l'Ouest ou Noord (13–22 min), mais à rendre avant la soirée (Yellow Bike Centraal 20:00, Rent a Bike Damstraat 18:00). Jamais après avoir bu : au-delà de 0,5 ‰ (≈ 2 verres), c'est un délit (≈ 200 €, casier possible)."],
+  ["go", "Taxi : Bolt XL à 5 ou 6", "Environ 31 € pour 5 km, soit 5–6 € par personne. Taxis à plaque bleue seulement, aux stations (Dam, Leidseplein, Rembrandtplein, Nieuwmarkt)."],
+  ["alert", "Piétons", "Jamais sur la piste cyclable (55 € d'amende) ; regardez des deux côtés, vélos et trams arrivent sans bruit. Pickpockets à Centraal, au Dam et dans les trams 2 et 5."],
+];
 function renderInfo() {
   const c = clock();
   const done = CHECKLIST.filter(i => state.ck[i.id]).length;
@@ -742,9 +767,8 @@ function renderInfo() {
   <div class="sec"><h2>L'auberge</h2><div class="card pad small">
     <b>St Christopher's The Winston</b><br>Warmoesstraat 129, 1012 JA Amsterdam<br>Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité obligatoire
     <div class="btns"><button type="button" class="btn" data-act="copyAddr">Copier l'adresse</button><button type="button" class="btn" data-act="open" data-id="base">Voir la fiche</button></div></div></div>
-  <div class="sec"><h2>Transports</h2><div class="card pad small">
-    Passez votre carte bancaire sans contact <b>en montant et en descendant</b>, toujours la même carte. Plafond GVB : 10,50 € par jour. Bus de nuit : 5,70 € (hors plafond). Ferries gratuits. Derniers trams vers 00:35–00:50.
-    ${ferryBlock("centraal", "Prochains ferries depuis Centraal")}</div></div>
+  <div class="sec"><h2>Se déplacer</h2><div class="list">${MOVE_RULES.map(([ic, t, b]) => `<div class="li rule">${icon(ic)}<span style="flex:1;min-width:0"><span class="nm">${t}</span><span class="sub">${b}</span></span></div>`).join("")}</div>
+    <div class="card pad small" style="margin-top:8px">${ferryBlock("centraal", "Prochains ferries depuis Centraal")}</div></div>
   <div class="sec"><h2>Réglages</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
     <div class="setrow"><span>Thème</span><select data-set="theme"><option value="system">Système</option><option value="light">Clair</option><option value="dark">Sombre</option></select></div>
     <div class="setrow"><span>Taille du texte</span><select data-set="text"><option value="normal">Normale</option><option value="large">Grande</option></select></div>
@@ -780,8 +804,9 @@ function initMap() {
 function drawMe(center) {
   if (!mapReady || !me) return;
   if (!meMarker) {
-    meCircle = L.circle([me.lat, me.lon], { radius: me.acc, color: "#1F6FEB", weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
-    meMarker = L.marker([me.lat, me.lon], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, zIndexOffset: 3000 }).addTo(map);
+    const meCol = getComputedStyle(document.documentElement).getPropertyValue("--me").trim() || "#4285f4";
+    meCircle = L.circle([me.lat, me.lon], { radius: me.acc, color: meCol, weight: 1, opacity: 0.35, fillColor: meCol, fillOpacity: 0.12, interactive: false }).addTo(map);
+    meMarker = L.marker([me.lat, me.lon], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [24, 24], iconAnchor: [12, 12] }), interactive: false, zIndexOffset: 3000 }).addTo(map);
   } else { meMarker.setLatLng([me.lat, me.lon]); meCircle.setLatLng([me.lat, me.lon]).setRadius(me.acc); }
   if (center) map.setView([me.lat, me.lon], center === true ? Math.max(map.getZoom(), 16) : map.getZoom());
 }
@@ -793,7 +818,7 @@ function mapFilterDay() {
 }
 let markerSig = "";
 const cluster = () => (L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius: 36, disableClusteringAtZoom: 17, showCoverageOnHover: false, spiderfyOnMaxZoom: true,
-  iconCreateFunction: g => L.divIcon({ className: "", html: `<div class="clu">${g.getChildCount()}</div>`, iconSize: [44, 44], iconAnchor: [22, 22] }) }) : L.layerGroup());
+  iconCreateFunction: g => L.divIcon({ className: "", html: `<div class="clu">${g.getChildCount()}</div>`, iconSize: [48, 48], iconAnchor: [24, 24] }) }) : L.layerGroup());
 function drawMarkers(force = false) {
   if (!mapReady) return;
   const day = mapFilterDay();
@@ -806,8 +831,8 @@ function drawMarkers(force = false) {
   if (!day) markersLayer.addLayer(grp);
   const add = (p, opts = {}) => {
     const done = p.cat !== "base" && isDone(opts.key || p.id);
-    const html = `<div class="pin${selMarker === p.id ? " sel" : ""}">${shapeSVG(p.cat, { done, num: opts.num })}</div>`;
-    const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html, iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: true, title: p.name, zIndexOffset: p.cat === "base" ? 1000 : selMarker === p.id ? 2000 : 0 });
+    const html = pinHTML(p.cat, { done, num: opts.num, sel: selMarker === p.id });
+    const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html, iconSize: [48, 48], iconAnchor: p.cat === "base" ? [24, 24] : [24, 46] }), keyboard: true, title: p.name, zIndexOffset: p.cat === "base" ? 1000 : selMarker === p.id ? 2000 : 0 });
     m.on("click", () => placeSheet(p.id));
     m.on("add", () => { const el = m.getElement(); if (el) el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); placeSheet(p.id); } }); });
     m.addTo(p.cat === "base" ? markersLayer : grp);
@@ -832,8 +857,8 @@ function drawMarkers(force = false) {
   for (const [k, v] of Object.entries(ESSDEF)) {
     if (!state.layers[k]) continue;
     for (const x of essList(k)) {
-      const html = `<div style="width:44px;height:44px;display:grid;place-items:center"><div class="pin-ess" style="width:24px;height:24px;border-radius:50%;background:var(--pin-ess);border:2px solid #fff;box-shadow:0 0 0 1.5px #1A1714;display:grid;place-items:center;color:#1A1714"><svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${v.icon}"/></svg></div></div>`;
-      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html, iconSize: [44, 44], iconAnchor: [22, 22] }), title: x.e[2] || v.one })
+      const html = `<div style="width:48px;height:48px;display:grid;place-items:center"><div class="pin-ess">${icon(v.icon)}</div></div>`;
+      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html, iconSize: [48, 48], iconAnchor: [24, 24] }), title: x.e[2] || v.one })
         .on("click", () => openEss(k)).addTo(essGrp);
     }
   }
@@ -845,7 +870,7 @@ function renderMapChrome() {
   const s = c.phase === "day" ? nextStep(c.day.id, c.lmin) : null;
   const ess = Object.entries(ESSDEF).map(([k, v]) => { const n = nearest(k, 1)[0]; return `<button type="button" class="chip" data-act="ess" data-type="${k}">${icon(v.icon, "i s")} ${n ? walkMin(n.d) + "′" : ""}</button>`; }).join("");
   $("#mapPeek").innerHTML = `<div class="handle"></div>
-    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(s.id === "base" ? "Auberge" : s.p.name)}</span></span><span class="pr num">${s.p.lat != null ? walkMin(dist(originFor(c.day.id, s, c.lmin).o, s.p)) + " min" : ""}</span></button>` : ""}
+    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(s.id === "base" ? "Auberge" : s.p.name)}</span></span><span class="pr num">${s.via ? icon(s.vm || "ferry") : s.p.lat != null ? walkMin(dist(originFor(c.day.id, s, c.lmin).o, s.p)) + " min" : ""}</span></button>` : ""}
     <div class="chips" style="margin:8px 0 0;padding:0">${ess}</div>`;
   document.documentElement.style.setProperty("--peek", ($("#mapPeek").offsetHeight || 120) + "px");
 }
@@ -1014,6 +1039,7 @@ function updateBadge() {
   b.textContent = late;
 }
 $$("nav.tabs button").forEach(b => b.addEventListener("click", () => show(b.dataset.s)));
+$$(".screen").forEach(s => s.addEventListener("scroll", () => s.classList.toggle("scrolled", s.scrollTop > 4), { passive: true }));
 
 // ───────────── Actions (délégation) ─────────────
 function toggleDone(id, val) {

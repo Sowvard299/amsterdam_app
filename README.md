@@ -9,15 +9,22 @@ logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_ap
   météo prévue. Pendant : la prochaine étape avec l'heure de départ et le temps de marche, la frise
   du jour, les soirées du soir, ce qui est ouvert à moins de 15 min, les toilettes, distributeurs,
   supermarchés et pharmacies les plus proches. Une journée va de 06:00 à 06:00.
-- **Carte** : épingles par forme et couleur (pignon = visite, rond = manger, carré = bar, losange =
-  soirée), parcours numéroté du jour, calques des essentiels, coche automatique par GPS.
+- **Carte** : épingles en goutte façon Google Maps (bleu = visite, rouge = soirée, jaune = bar,
+  vert = manger), parcours numéroté du jour, calques des essentiels, coche automatique par GPS.
 - **Lieux** : bars triés par prix du petit verre, manger, soirées par jour, visites ; filtres
   ouvert maintenant, moins de 15 min, pas cher, à faire.
-- **Programme** : le plan de chaque jour, avec Fait / Passer.
-- **Infos** : liste « avant de partir », urgences, auberge, ferries en direct, réglages.
+- **Programme** : un secteur par jour (mar. vieux centre, mer. Jordaan et Ouest, jeu. Sud,
+  ven. Noord), avec le mode de transport de chaque trajet, le retour de nuit et Fait / Passer.
+- **Infos** : liste « avant de partir », urgences, auberge, règles pour se déplacer (à pied, tram,
+  ferry, bus de nuit, vélo, taxi), ferries en direct, réglages.
 
 Chaque prix, horaire et soirée garde sa source, sa date et un niveau de confiance
-(sûr / probable / à vérifier). Données vérifiées le 15/10/2026.
+(sûr / probable / à vérifier). Données vérifiées le 15/10/2026, plan par secteurs et transports
+mesurés le 16/10/2026 (marche OSRM, itinéraires Transitous, tarifs GVB 2026).
+
+Charte : Material 3 Expressive (DA Google) : police Google Sans Flex, icônes Material Symbols
+Rounded, couleurs générées depuis le bleu Google #1A73E8 (clair et sombre), barre de navigation,
+cartes, chips et feuille du bas selon les specs m3.material.io.
 
 ## Sources en direct
 
