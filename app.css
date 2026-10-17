@@ -635,3 +635,4 @@ details.story>p{margin:0;padding:0 14px 12px;font:var(--md-body-m);letter-spacin
 details.story>p.fun{margin:0 10px 10px;padding:10px 14px;color:var(--ink)}
 details.story>p.ssrc{padding-bottom:14px}
 @media (max-width:359px){ .enc{padding:0 10px} }
+.hwx{display:flex;gap:6px;align-items:flex-start;margin:8px 0 0}.hwx:empty{display:none}.hwx .ms{flex:none;margin-top:2px;color:var(--ink-2)}
