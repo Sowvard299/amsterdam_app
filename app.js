@@ -12,7 +12,8 @@ const MS = { sun: "sunny", moon: "bedtime", map: "map", list: "format_list_bulle
   pcloud: "partly_cloudy_day", fog: "foggy", storm: "thunderstorm", snow: "weather_snowy", clock: "schedule", ticket: "confirmation_number",
   alert: "warning", chev: "chevron_right", home: "home", ferry: "directions_boat", phone: "call", doc: "description", up: "keyboard_arrow_up",
   down: "keyboard_arrow_down", skip: "skip_next", sunset: "wb_twilight", bike: "directions_bike", tram: "tram", subway: "subway", bus: "directions_bus",
-  train: "train", copy: "content_copy", ext: "open_in_new", note: "edit_note", sure: "verified", maybe: "history", unsure: "help" };
+  train: "train", copy: "content_copy", ext: "open_in_new", note: "edit_note", sure: "verified", maybe: "history", unsure: "help",
+  thumb: "thumb_up", fuel: "local_gas_station", bed: "bed", law: "gavel", shield: "shield", kit: "backpack", lang: "translate" };
 const icon = (n, cls = "i") => `<span class="ms${cls.replace(/^i\b/, "")}" aria-hidden="true">${MS[n] || n}</span>`;
 const params = new URLSearchParams(location.search);
 const FAKE_NOW = params.get("now"); // pour tester : ?now=2026-10-28T18:05:00%2B01:00
@@ -87,7 +88,7 @@ function applyTheme() {
   const r = document.documentElement;
   if (state.theme === "system") r.removeAttribute("data-theme"); else r.dataset.theme = state.theme;
   if (state.text === "large") r.dataset.text = "large"; else r.removeAttribute("data-text");
-  for (const m of $$('meta[name="theme-color"]')) { if (!m.dataset.media) m.dataset.media = m.media; m.media = state.theme === "system" ? m.dataset.media : (m.content === "#10131a") === (state.theme === "dark") ? "all" : "not all"; }
+  for (const m of $$('meta[name="theme-color"]')) { if (!m.dataset.media) m.dataset.media = m.media; m.media = state.theme === "system" ? m.dataset.media : (m.content === "#000000") === (state.theme === "dark") ? "all" : "not all"; }
   if (typeof drawMarkers === "function" && mapReady) drawMarkers(true); // la couleur du parcours vient du thème
 }
 
@@ -500,6 +501,83 @@ function timeline(day, { lmin = null, controls = false } = {}) {
   return html + "</ol>";
 }
 
+// ───────────── Stop : Paris → Bruxelles → Rotterdam → Amsterdam, retour Amsterdam → Paris ─────────────
+const HLEGS = typeof HITCH !== "undefined" ? HITCH.legs : [];
+const HLEG = Object.fromEntries(HLEGS.map(l => [l.id, l]));
+const gmDir = (s, mode = "transit") => `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=${mode}`;
+const signs = list => `<div class="signs">${list.map(t => `<span class="signc">${esc(t)}</span>`).join("")}</div>`;
+const hitchRow = l => `<button type="button" class="li" data-act="hitch" data-id="${l.id}">${icon("thumb")}<span style="flex:1;min-width:0"><span class="nm">${esc(l.label)} · ${esc(l.from)} → ${esc(l.to)}</span><span class="sub">${l.km} km · ${esc(l.duration)}</span></span>${icon("chev", "i s")}</button>`;
+function hitchCard(l, { next = null } = {}) {
+  const a = l.spots[0];
+  return `<div class="card pad next hitch">
+    <div class="when">${icon("thumb", "i s")}En stop · ${esc(l.from)} → ${esc(l.to)} · ${l.km} km</div>
+    <h3>${esc(a.name)}</h3>
+    <p class="why">${esc(a.access)}</p>
+    <div class="meta row">${icon("clock", "i s")}<span class="grow">Départ conseillé ${esc(l.startBy)} · ${esc(a.wait)}</span>${confBadge(a.conf)}</div>
+    ${signs(l.sign)}
+    <div class="alert warn">${icon("alert", "i s")}<span>Plan B : ${esc(l.noGo)}</span></div>
+    <div class="btns lg"><a class="btn primary" href="${gmDir(a)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
+      <button type="button" class="btn" data-act="hitch" data-id="${l.id}">${icon("info")} Détails</button></div>
+    ${next ? `<p class="small" style="margin:12px 0 0"><button type="button" class="btn sm ghost" data-act="hitch" data-id="${next.id}">Ensuite : ${esc(next.from)} → ${esc(next.to)}</button></p>` : ""}
+  </div>`;
+}
+function hitchSection(title, legs) {
+  if (!HLEGS.length) return "";
+  return `<div class="sec"><h2>${esc(title)} <span class="grow"></span><button type="button" class="btn sm ghost" data-act="hitchRules">${icon("law", "i s")} Règles</button></h2>
+    <div class="list">${legs.map(hitchRow).join("")}</div></div>`;
+}
+// Mardi 27 : carte du trajet tant que les sacs ne sont pas posés à l'auberge (GPS si disponible, sinon l'heure)
+function hitchTuesday(c) {
+  if (!HLEGS.length || c.day.id !== "mar" || c.lmin >= 20 * 60) return "";
+  const b = plan("mar").find(st => st.id === "base");
+  if (b && isDone(stepKey(b, "mar"))) return "";
+  if (me && dist(me, BASE) < 3000) return "";
+  const first = me ? me.lat < 51.75 : c.lmin < 12 * 60 + 30;
+  const l = first ? HLEG.h2 : HLEG.h3;
+  return `<div class="sec">${hitchCard(l, { next: first ? HLEG.h3 : null })}</div>`;
+}
+const COUNTRY = { FR: "France", BE: "Belgique", NL: "Pays-Bas" };
+function openHitch(id) {
+  const l = HLEG[id];
+  if (!l) return;
+  const spotHTML = (st, mid) => `<div class="hs">
+      <div class="row"><span class="shape" data-cat="${mid ? "bar" : "visit"}" aria-hidden="true">${icon(mid ? "fuel" : "thumb")}</span><b class="grow">${esc(st.name)}</b>${confBadge(st.conf)}</div>
+      <p>${esc(st.access)}</p><p class="small muted">${esc(st.wait)}</p>${st.tip ? `<p class="small">${esc(st.tip)}</p>` : ""}
+      <div class="btns"><a class="btn${mid ? "" : " primary"}" href="${gmDir(st)}" target="_blank" rel="noopener">${icon("go")} ${mid ? "Carte" : "Y aller"}</a><span class="signc">${esc(st.sign)}</span></div></div>`;
+  const srcs = [];
+  for (const st of [...l.spots, ...(l.mid || [])]) for (const x of st.src || []) if (!srcs.some(y => y.u === x.u && y.t === x.t)) srcs.push(x);
+  const head = `<span class="shape" data-cat="visit" aria-hidden="true">${icon("thumb")}</span><div style="flex:1;min-width:0"><h2 id="sheetTitle">${esc(l.from)} → ${esc(l.to)}</h2>
+    <div class="small muted" style="margin-top:2px">${esc(l.label)} · ${l.km} km · ${esc(l.duration)}</div></div>`;
+  const content = `<div class="alert warn" style="margin-top:0">${icon("alert", "i s")}<span>${esc(l.noGo)}</span></div>
+    <div class="kv"><h4>Départ conseillé</h4><p>${esc(l.startBy)} · ${esc((HITCH.sun || {})[l.date] || "")}</p></div>
+    <div class="kv"><h4>Pancartes</h4>${signs(l.sign)}</div>
+    <div class="kv"><h4>Spots de départ, le meilleur d'abord</h4>${l.spots.map(st => spotHTML(st, false)).join("")}</div>
+    ${(l.mid || []).length ? `<div class="kv"><h4>Où se faire déposer en route</h4>${l.mid.map(st => spotHTML(st, true)).join("")}</div>` : ""}
+    <div class="kv"><h4>Itinéraire</h4><p>${esc(l.route)}</p></div>
+    <div class="kv"><h4>À l'arrivée</h4><p>${esc(l.arrival)}</p></div>
+    ${l.stop ? `<div class="kv"><h4>Pause à Rotterdam</h4><p>${esc(l.stop)}</p></div>` : ""}
+    <div class="kv"><h4>Plan B</h4>${l.planB.map(b => `<p><b>${esc(b.mode)}</b> · ${esc(b.txt)} <a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, ""))}</a> <span class="muted">(prix ${esc(b.price)})</span></p>`).join("")}</div>
+    ${l.sleep ? `<div class="kv"><h4>Dormir à Bruxelles (lundi 26)</h4>${l.sleep.map(b => `<p><b>${esc(b.name)}</b> · ${esc(b.addr)}<br><span class="small">${esc(b.price)}</span> · <a href="${gmDir(b)}" target="_blank" rel="noopener">itinéraire</a></p>`).join("")}<p class="xs muted">Prix Hostelworld pour la nuit du 26 au 27/10, relevés le 16/10/2026.</p></div>` : ""}
+    <div class="kv"><h4>Sources</h4><div class="srcs">${srcs.map(x => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div><p class="xs muted">${esc(HITCH.attribution)}</p></div>
+    <div class="btns"><button type="button" class="btn" data-act="hitchRules">${icon("law")} Règles et sécurité</button></div>`;
+  openSheet(head, content, { full: true });
+}
+function openHitchRules() {
+  if (!HLEGS.length) return;
+  const H = HITCH;
+  const ul = a => `<ul>${a.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`;
+  const head = `<span class="shape" data-cat="visit" aria-hidden="true">${icon("law")}</span><div style="flex:1;min-width:0"><h2 id="sheetTitle">Le stop : règles et sécurité</h2>
+    <div class="small muted" style="margin-top:2px">France, Belgique, Pays-Bas</div></div>`;
+  const content = `<div class="kv" style="margin-top:0"><h4>Ce que dit la loi</h4>${H.law.map(x => `<p><b>${COUNTRY[x.country] || x.country}</b> · ${esc(x.txt)}<br><a class="small" href="${esc(x.src.u)}" target="_blank" rel="noopener">${esc(x.src.t)}</a></p>`).join("")}</div>
+    <div class="kv"><h4>Sécurité à deux</h4>${ul(H.safety)}</div>
+    <div class="kv"><h4>Technique</h4>${ul(H.technique)}</div>
+    <div class="kv"><h4>Dans le sac</h4>${ul(H.kit)}</div>
+    <div class="kv"><h4>En néerlandais</h4>${H.phrases.map(x => `<p>${esc(x.fr)}<br><b lang="nl">${esc(x.nl)}</b></p>`).join("")}</div>
+    <div class="kv"><h4>Applis</h4>${H.apps.map(x => `<p><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a> · ${esc(x.txt)}</p>`).join("")}</div>
+    <p class="xs muted">${esc(H.attribution)}</p>`;
+  openSheet(head, content, { full: true });
+}
+
 // ───────────── Écran Aujourd'hui ─────────────
 function statusLine(c) {
   const wx = state.wx && state.wx.d.current;
@@ -547,6 +625,8 @@ function todayBefore(c) {
   }).join("");
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1 class="big num">J-${n}</h1><p>Mar 27 → Ven 30 oct. · départ sam. 31 tôt</p></div>${xxx(null)}</div>
+  ${HLEG.h1 && c.a.date === HLEG.h1.date ? `<div class="sec">${hitchCard(HLEG.h1)}</div>` : ""}
+  ${hitchSection("En stop jusqu'à Amsterdam, et retour", HLEGS)}
   <div class="sec"><h2>À faire maintenant</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
     ${todo.length ? todo.map(i => ckRow(i, c.a.date)).join("") : `<p class="empty">Tout est prêt.</p>`}</div>
     <p class="small" style="margin:8px 0 0"><button type="button" class="btn sm ghost" data-act="tab" data-s="s-info">Toute la liste (${CHECKLIST.filter(i => state.ck[i.id]).length}/${CHECKLIST.length})</button></p></div>
@@ -636,6 +716,7 @@ function todayDay(c) {
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1>${esc(c.day.theme)}</h1><p>Jour ${c.idx + 1}/4 · ${pr.done}/${pr.total} étapes · ${esc(c.day.sub)}</p></div>${xxx(pr.kinds)}</div>
   ${homeCard}
+  ${hitchTuesday(c)}
   <div class="sec">${nextCard(c, s)}</div>
   <div class="sec">${weatherStrip(c)}</div>
   <div class="sec"><h2>Se déplacer aujourd'hui</h2>${moveCard(c.day)}</div>
@@ -652,16 +733,19 @@ function todayDay(c) {
 }
 function todayLeave(c) {
   const trains = ["03:46", "04:46", "05:05", "05:18", "05:29", "05:49"].filter(t => +t.slice(0, 2) * 60 + +t.slice(3) >= c.a.min);
-  const items = ["Pièce d'identité et cartes bancaires", "Chargeurs et batterie externe", "Casier de l'auberge vidé, cadenas repris", "Carte-clé rendue à la réception (départ avant 11:00)", "Billet de train ou d'avion dans le téléphone"];
+  const items = ["Pièce d'identité et cartes bancaires", "Chargeurs et batterie externe chargée", "Casier de l'auberge vidé, cadenas repris", "Carte-clé rendue à la réception (départ avant 11:00)", "Pancartes UTRECHT, BREDA, PARIS et gilet réfléchissant"];
+  const h4 = HLEG.h4;
   return `${statusLine(c)}
-  <div class="flag"><div class="t"><h1>Départ</h1><p>Samedi 31 octobre · Centraal à 7 min à pied</p></div>${xxx({ voir: true, manger: true, sortir: true })}</div>
-  <div class="sec"><div class="card pad next"><div class="when">Trains Centraal → Schiphol (prévus)</div>
-    <p class="num" style="font-size:var(--fs-lg);font-weight:700;margin:8px 0">${trains.length ? trains.join(" · ") : "Un train toutes les 10 à 15 min"}</p>
-    <p class="why">13 à 17 min de trajet. Schiphol demande 2 h d'avance pour un vol Schengen. Vérifiez dans l'appli NS. Badgez votre carte au portique.</p>
-    <div class="btns"><a class="btn primary" href="https://www.google.com/maps/dir/?api=1&destination=52.3791,4.9003&travelmode=walking" target="_blank" rel="noopener">${icon("walk")} Vers Centraal</a></div></div></div>
+  <div class="flag"><div class="t"><h1>Retour</h1><p>Samedi 31 octobre · ${h4 ? "en stop jusqu'à Paris" : "Centraal à 7 min à pied"}</p></div>${xxx({ voir: true, manger: true, sortir: true })}</div>
+  ${h4 ? `<div class="sec">${hitchCard(h4)}</div>` : ""}
   <div class="sec"><h2>Avant de fermer la porte</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
     ${items.map((t, i) => { const id = "leave-" + i; const done = !!state.ck[id]; return `<label class="ck${done ? " done" : ""}"><input type="checkbox" data-act="ck" data-id="${id}" ${done ? "checked" : ""}><span class="t">${esc(t)}</span></label>`; }).join("")}
-  </div></div>`;
+  </div></div>
+  <div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Ceux qui rentrent en train ou en avion${icon("chev", "i s chev")}</summary>
+    <div class="card pad"><div class="when">Trains Centraal → Schiphol (prévus)</div>
+    <p class="num" style="font-size:var(--fs-lg);font-weight:600;margin:8px 0">${trains.length ? trains.join(" · ") : "Un train toutes les 10 à 15 min"}</p>
+    <p class="why">13 à 17 min de trajet. Schiphol demande 2 h d'avance pour un vol Schengen. Vérifiez dans l'appli NS. Badgez votre carte au portique.</p>
+    <div class="btns"><a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=52.3791,4.9003&travelmode=walking" target="_blank" rel="noopener">${icon("walk")} Vers Centraal</a></div></div></details></div>`;
 }
 function todayAfter(c) {
   const all = PLACES.filter(p => p.cat !== "party");
@@ -767,6 +851,7 @@ function renderInfo() {
   <div class="sec"><h2>L'auberge</h2><div class="card pad small">
     <b>St Christopher's The Winston</b><br>Warmoesstraat 129, 1012 JA Amsterdam<br>Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité obligatoire
     <div class="btns"><button type="button" class="btn" data-act="copyAddr">Copier l'adresse</button><button type="button" class="btn" data-act="open" data-id="base">Voir la fiche</button></div></div></div>
+  ${hitchSection("En stop", HLEGS)}
   <div class="sec"><h2>Se déplacer</h2><div class="list">${MOVE_RULES.map(([ic, t, b]) => `<div class="li rule">${icon(ic)}<span style="flex:1;min-width:0"><span class="nm">${t}</span><span class="sub">${b}</span></span></div>`).join("")}</div>
     <div class="card pad small" style="margin-top:8px">${ferryBlock("centraal", "Prochains ferries depuis Centraal")}</div></div>
   <div class="sec"><h2>Réglages</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
@@ -1059,6 +1144,8 @@ document.addEventListener("click", e => {
   const a = el.dataset.act, id = el.dataset.id;
   switch (a) {
     case "open": placeSheet(id); break;
+    case "hitch": openHitch(id); break;
+    case "hitchRules": openHitchRules(); break;
     case "closeSheet": closeSheet(); break;
     case "tab": closeSheet(); show(el.dataset.s); break;
     case "day": state.progDay = el.dataset.day; save(); closeSheet(); show("s-plan"); break;
