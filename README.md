@@ -22,9 +22,10 @@ Chaque prix, horaire et soirée garde sa source, sa date et un niveau de confian
 (sûr / probable / à vérifier). Données vérifiées le 15/10/2026, plan par secteurs et transports
 mesurés le 16/10/2026 (marche OSRM, itinéraires Transitous, tarifs GVB 2026).
 
-Charte : Material 3 Expressive (DA Google) : police Google Sans Flex, icônes Material Symbols
-Rounded, couleurs générées depuis le bleu Google #1A73E8 (clair et sombre), barre de navigation,
-cartes, chips et feuille du bas selon les specs m3.material.io.
+Charte : DA Gemini (« Neural Expressive », relevée sur gemini.google.com le 16/10/2026) : fond neutre
+#FAF9F9 / noir, surfaces blanches ou #1C1C1C, tout en pilule, icônes fines Material Symbols, titres
+légers Google Sans Flex avec le dégradé bleu Gemini, action principale bleu pastel #9DD2FF avec halo
+arc-en-ciel, lueur bleue en bas de l'écran Aujourd'hui. Les épingles gardent les 4 couleurs Google.
 
 ## Sources en direct
 

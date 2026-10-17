@@ -87,7 +87,7 @@ function applyTheme() {
   const r = document.documentElement;
   if (state.theme === "system") r.removeAttribute("data-theme"); else r.dataset.theme = state.theme;
   if (state.text === "large") r.dataset.text = "large"; else r.removeAttribute("data-text");
-  for (const m of $$('meta[name="theme-color"]')) { if (!m.dataset.media) m.dataset.media = m.media; m.media = state.theme === "system" ? m.dataset.media : (m.content === "#10131a") === (state.theme === "dark") ? "all" : "not all"; }
+  for (const m of $$('meta[name="theme-color"]')) { if (!m.dataset.media) m.dataset.media = m.media; m.media = state.theme === "system" ? m.dataset.media : (m.content === "#000000") === (state.theme === "dark") ? "all" : "not all"; }
   if (typeof drawMarkers === "function" && mapReady) drawMarkers(true); // la couleur du parcours vient du thème
 }
 

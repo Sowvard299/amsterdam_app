@@ -1,6 +1,6 @@
 // Hors ligne : l'appli (coquille + données) est servie depuis le cache puis rafraîchie en arrière-plan.
 // Tuiles OSM : seulement celles déjà affichées (aucun préchargement, politique d'OSM), 800 au plus.
-const VERSION = "ams-v3-m3-2026-10-16";
+const VERSION = "ams-v4-gemini-2026-10-17";
 const SHELL = ["./", "index.html", "app.css", "app.js", "data.js", "ess.js", "manifest.json", "icon.svg", "icon-192.png", "icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
