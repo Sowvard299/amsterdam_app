@@ -13,7 +13,8 @@ const MS = { sun: "sunny", moon: "bedtime", map: "map", list: "format_list_bulle
   alert: "warning", chev: "chevron_right", home: "home", ferry: "directions_boat", phone: "call", doc: "description", up: "keyboard_arrow_up",
   down: "keyboard_arrow_down", skip: "skip_next", sunset: "wb_twilight", bike: "directions_bike", tram: "tram", subway: "subway", bus: "directions_bus",
   train: "train", copy: "content_copy", ext: "open_in_new", note: "edit_note", sure: "verified", maybe: "history", unsure: "help",
-  thumb: "thumb_up", fuel: "local_gas_station", bed: "bed", law: "gavel", shield: "shield", kit: "backpack", lang: "translate" };
+  thumb: "thumb_up", fuel: "local_gas_station", bed: "bed", law: "gavel", shield: "shield", kit: "backpack", lang: "translate",
+  spark: "auto_awesome", story: "auto_stories" };
 const icon = (n, cls = "i") => `<span class="ms${cls.replace(/^i\b/, "")}" aria-hidden="true">${MS[n] || n}</span>`;
 const params = new URLSearchParams(location.search);
 const FAKE_NOW = params.get("now"); // pour tester : ?now=2026-10-28T18:05:00%2B01:00
@@ -58,6 +59,7 @@ const CATS = {
   food: { label: "Manger", one: "Manger", glyph: "fork" },
   bar: { label: "Bars", one: "Bar", glyph: "beer" },
   party: { label: "Soirées", one: "Soirée", glyph: "music" },
+  curio: { label: "Insolite", one: "À voir en passant", glyph: "spark" },
 };
 const DAYBY = Object.fromEntries(DAYS.map(d => [d.id, d]));
 
@@ -66,7 +68,7 @@ const KEY = "ams-v2";
 const DEF = {
   checked: {}, skipped: {}, ck: {}, notes: {}, theme: "system", text: "normal", nav: "google", radius: 40, dwell: 60,
   gps: false, gpsTested: false, mapSeen: false, onboarded: false, hideDone: false, leaveTime: "",
-  layers: { visit: true, food: true, bar: true, party: true, wc: false, atm: false, sm: false, ph: false, urinals: false },
+  layers: { visit: true, food: true, bar: true, party: true, curio: true, wc: false, atm: false, sm: false, ph: false, urinals: false },
   mapFilter: "today", listCat: "bar", listSort: "price", lf: { open: false, near: false, cheap: false, todo: false },
   listDay: null, progDay: null, wx: null,
 };
@@ -124,6 +126,7 @@ function hoursState(p, dayId, lmin) {
     if (lmin < e) return { k: "open", txt: "jusqu'à " + fmtMin(e), until: e };
     return { k: "closed", txt: "terminé" };
   }
+  if (p.cat === "curio" && !p.h) return p.when ? { k: "unknown", txt: p.when } : { k: "open", txt: "visible de la rue" };
   const h = p.h && p.h[dayId];
   if (h == null || h === "?") return { k: "unknown", txt: "horaires inconnus" };
   if (/^ferm/.test(h)) return { k: "closed", txt: "fermé ce jour" };
@@ -382,6 +385,18 @@ $("#sheetGrab").addEventListener("click", () => $("#sheet").classList.toggle("fu
   }
 })();
 
+// Histoire courte d'un lieu (sources propres) et curiosités « en chemin » d'une étape
+function storyBody(st) {
+  const src = (st.src || []).map(s => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ");
+  return `<p>${esc(st.txt)}</p>${st.fun ? `<p class="fun">${icon("spark", "i s")}<span>${esc(st.fun)}</span></p>` : ""}
+    <p class="xs muted ssrc">${st.conf === "probable" ? "Sources concordantes mais non officielles · " : ""}${src}</p>`;
+}
+const storyHTML = st => (st ? `<div class="kv story-kv"><h4>L'histoire</h4>${storyBody(st)}</div>` : "");
+function enChips(s, { lead = "En chemin" } = {}) {
+  const list = (s.en || []).map(e => BYID[e]).filter(Boolean);
+  if (!list.length) return "";
+  return `<div class="en"><span class="lead">${icon("spark", "i s")}${lead}</span>${list.map(q => `<button type="button" class="enc${isDone(q.id) ? " done" : ""}" data-act="open" data-id="${q.id}" data-cat="${q.cat}"><span>${esc(q.name)}</span></button>`).join("")}</div>`;
+}
 function placeSheet(id) {
   const p = BYID[id];
   if (!p) return;
@@ -395,7 +410,10 @@ function placeSheet(id) {
       <div class="small muted" style="margin-top:2px">${catLabel}${p.venue ? " · " + esc(p.venue) : ""}${w ? ` · ${w} min à pied` : ""}</div></div>
       ${p.price != null ? `<div class="price" style="font-weight:700;font-size:var(--fs-lg)">${euro(p.price)}</div>` : ""}`;
   const planned = [];
-  for (const d of DAYS) for (const s of PLAN[d.id] || []) if (s.id === id) planned.push(`${d.label} · ${s.at}${s.note ? " — " + esc(s.note) : ""}`);
+  for (const d of DAYS) for (const s of PLAN[d.id] || []) {
+    if (s.id === id) planned.push(`${d.label} · ${s.at}${s.note ? " — " + esc(s.note) : ""}`);
+    if ((s.en || []).includes(id)) planned.push(`${d.label} · en chemin vers ${esc(BYID[s.id].name)} (${s.at})`);
+  }
   let hours = "";
   if (p.cat === "party") {
     hours = `<p><b>${DAYBY[p.date] ? DAYBY[p.date].long : "Tous les soirs"}</b> · ${esc(p.start)}${p.end && !/non/.test(p.end) ? "–" + esc(p.end) : ""}</p>`;
@@ -423,6 +441,7 @@ function placeSheet(id) {
     <p class="small muted" style="margin:10px 0 0">${icon("walk", "i s")} ${dist0 != null ? `${walkMin(dist0)} min · ${kmTxt(dist0)} ${me ? "depuis vous" : "depuis l'auberge"}` : "adresse sur le billet"} · ${esc(p.addr || "")}</p>
     ${st ? `<p style="margin:8px 0 0">${stateTag(st)}</p>` : ""}
     ${p.why ? `<div class="kv"><h4>Pourquoi</h4><p>${esc(p.why)}</p></div>` : ""}
+    ${storyHTML(p.story)}
     ${p.priceTxt ? `<div class="kv"><h4>Prix</h4><p>${esc(p.priceTxt)}</p></div>` : ""}
     ${know.length ? `<div class="kv"><h4>Bon à savoir</h4><p>${know.join("<br>")}</p></div>` : ""}
     ${hours ? `<div class="kv"><h4>Horaires</h4>${hours}</div>` : ""}
@@ -430,7 +449,7 @@ function placeSheet(id) {
     ${p.id === "v-ndsm" ? ferryBlock("ndsm", "Prochains ferries depuis NDSM") : ""}
     ${p.id === "v-eye" || p.id === "v-lookout" ? ferryBlock("buiksloterweg", "Prochains ferries depuis Buiksloterweg") : ""}
     ${planned.length ? `<div class="kv"><h4>Prévu</h4><p>${planned.join("<br>")}</p></div>` : ""}
-    ${p.cat !== "base" ? `<div class="kv"><h4>Fiabilité</h4><p>${confBadge(p.conf)} <span class="xs muted">vérifié le 15 oct.</span></p><div class="srcs">${src}</div></div>` : ""}
+    ${p.cat !== "base" ? `<div class="kv"><h4>Fiabilité</h4><p>${confBadge(p.conf)} <span class="xs muted">vérifié le ${esc(p.ver || "15 oct.")}</span></p><div class="srcs">${src}</div></div>` : ""}
     ${p.cat !== "base" ? `<div class="kv"><h4>Mes notes</h4><textarea data-note="${id}" placeholder="Visible seulement sur ce téléphone">${esc(state.notes[id] || "")}</textarea></div>` : ""}`;
   openSheet(head, content);
   if (mapReady && p.lat != null && $("#s-map").classList.contains("active")) {
@@ -486,6 +505,7 @@ function timeline(day, { lmin = null, controls = false } = {}) {
     const cls = [done ? "done" : "", skipped ? "skipped" : "", nx && nx.id === s.id && lmin != null ? "isnext" : ""].join(" ");
     html += `<li class="${cls}"><span class="time num">${s.at}</span><span class="rail"><span class="dot"></span></span><div class="body">
       ${s.via ? `<div class="walk">${icon(s.vm || "ferry", "i s")} ${esc(s.via)}</div>` : w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied${s.alt ? ` · ${esc(s.alt)}` : ""}</div>` : ""}
+      ${enChips(s)}
       <button type="button" class="item" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat, done)}
         <span class="nm">${esc(s.id === "base" ? "Auberge : déposer les sacs" : s.p.name)}</span>
         <span class="num small" style="font-weight:700">${s.p.price != null ? euro(s.p.price) : ""}</span></button>
@@ -666,6 +686,8 @@ function nextCard(c, s) {
       ${p.price != null ? `<span class="price num">${euro(p.price)}</span>` : ""}</div>
     ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
     ${s.note ? `<p class="why"><b>${esc(s.note)}</b></p>` : ""}
+    ${p.story ? `<details class="story"><summary>${icon("story", "i s")}<span class="grow">L'histoire en 30 secondes</span>${icon("down", "i s chev")}</summary>${storyBody(p.story)}</details>` : ""}
+    ${enChips(s, { lead: "Sur le chemin" })}
     <div class="meta row">${icon(s.via ? s.vm || "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : `${w} min ${esc(org.label)}`}${!here && !s.via && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
     ${alerts.join("")}
     <div class="btns lg"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
@@ -706,7 +728,7 @@ function todayDay(c) {
   const openNow = PLACES.filter(p => (p.cat === "bar" || p.cat === "food") && p.lat != null)
     .map(p => ({ p, st: hoursState(p, day, c.lmin), w: walkFrom(p) }))
     .filter(x => x.st.k === "open" && x.w <= 15).sort((a, b) => (priceOn(a.p, day) ?? 99) - (priceOn(b.p, day) ?? 99)).slice(0, 6);
-  const others = PLACES.filter(p => p.cat !== "party" && (p.days || []).includes(day) && !(PLAN[day] || []).some(st => st.id === p.id));
+  const others = PLACES.filter(p => p.cat !== "party" && p.cat !== "curio" && (p.days || []).includes(day) && !(PLAN[day] || []).some(st => st.id === p.id));
   const home = BASE, wHome = walkMin(dist(from(), home));
   const late = c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
   const homeCard = late ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer</div>
@@ -762,7 +784,7 @@ function renderPlan() {
   const c = clock();
   const day = state.progDay || (c.phase === "day" ? c.day.id : "mar");
   const d = DAYBY[day];
-  const others = PLACES.filter(p => (p.days || []).includes(day) && p.cat !== "party" && !(PLAN[day] || []).some(s => s.id === p.id));
+  const others = PLACES.filter(p => (p.days || []).includes(day) && p.cat !== "party" && p.cat !== "curio" && !(PLAN[day] || []).some(s => s.id === p.id));
   const pr = dayProgress(day);
   $("#s-plan").innerHTML = `<div class="status"><span class="grow">Programme</span></div>
   <div class="sec" style="padding-top:0"><div class="seg" role="group" aria-label="Jour">${DAYS.map(x => `<button type="button" data-act="day" data-day="${x.id}" aria-pressed="${x.id === day}">${x.label}</button>`).join("")}</div></div>
@@ -779,7 +801,7 @@ function renderPlan() {
 }
 
 // ───────────── Écran Lieux ─────────────
-const CHEAP = { bar: 3, food: 10, party: 10, visit: 10 };
+const CHEAP = { bar: 3, food: 10, party: 10, visit: 10, curio: 10 };
 function renderPlaces() {
   const c = clock();
   const cat = state.listCat;
@@ -801,6 +823,7 @@ function renderPlaces() {
     food: "Prix du repas complet le moins cher ou du plat phare.",
     party: "Prix en prévente quand il existe. Les programmes peuvent bouger : revérifiez la veille.",
     visit: "Prix étudiant quand il existe (carte de l'UE).",
+    curio: "Gratuit, sur vos trajets : 1 à 5 min chacun, rien à réserver. Chaque fiche raconte l'histoire du lieu.",
   };
   $("#s-places").innerHTML = `<div class="status"><span class="grow">Lieux</span></div>
   <div class="sec" style="padding-top:0"><div class="seg" role="group" aria-label="Catégorie">${Object.entries(CATS).map(([k, v]) => `<button type="button" data-act="cat" data-cat="${k}" aria-pressed="${k === cat}">${v.label}</button>`).join("")}</div></div>
@@ -928,6 +951,7 @@ function drawMarkers(force = false) {
     const pts = [[BASE.lat, BASE.lon], ...steps.map(s => [s.p.lat, s.p.lon])];
     L.polyline(pts, { color: getComputedStyle(document.documentElement).getPropertyValue("--route").trim() || "#333", weight: 4, dashArray: "2 8", lineCap: "round" }).addTo(routeLayer);
     steps.forEach((s, i) => add(s.p, { num: i + 1, key: s.id }));
+    if (state.layers.curio) for (const s of steps) for (const e of s.en || []) if (BYID[e] && BYID[e].lat != null && !steps.some(x => x.id === e)) add(BYID[e]);
   } else {
     for (const p of PLACES) {
       if (p.lat == null || !state.layers[p.cat]) continue;
@@ -971,9 +995,9 @@ function renderMap() {
 function layersSheet() {
   const row = (k, l) => `<label class="setrow"><span>${l}</span><input type="checkbox" data-layer="${k}" ${state.layers[k] ? "checked" : ""} style="width:22px;height:22px"></label>`;
   openSheet(`<div style="flex:1"><h2 id="sheetTitle">Calques</h2></div>`,
-    `${row("visit", "Visites")}${row("food", "Manger")}${row("bar", "Bars")}${row("party", "Soirées (du jour pendant le voyage)")}
+    `${row("visit", "Visites")}${row("food", "Manger")}${row("bar", "Bars")}${row("party", "Soirées (du jour pendant le voyage)")}${row("curio", "Insolite (curiosités en chemin)")}
      <div class="kv"><h4>Essentiels</h4></div>${row("wc", "Toilettes publiques")}${row("urinals", "Inclure les urinoirs (hommes)")}${row("atm", "Distributeurs")}${row("sm", "Supermarchés")}${row("ph", "Pharmacies")}
-     <p class="xs muted">Les calques Visites à Soirées s'appliquent aux vues « Tout » et « À faire ».</p>`);
+     <p class="xs muted">Les calques Visites à Insolite s'appliquent aux vues « Tout » et « À faire » ; dans la vue d'un jour, Insolite montre les curiosités du trajet.</p>`);
 }
 
 // ───────────── GPS ─────────────

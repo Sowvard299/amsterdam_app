@@ -55,12 +55,13 @@
   --focus:var(--md-sys-color-primary);
   --ok:var(--md-ext-ok); --warn:var(--md-ext-warn); --bad:var(--md-sys-color-error);
   --warn-bg:var(--md-ext-warn-container); --on-warn-bg:var(--md-ext-on-warn-container);
-  --c-visit:#005ac1; --c-food:#006e2c; --c-bar:#795900; --c-party:#b91e17; --c-ess:var(--md-sys-color-on-surface-variant);
+  --c-visit:#005ac1; --c-food:#006e2c; --c-bar:#795900; --c-party:#b91e17; --c-curio:#6f42b8; --c-ess:var(--md-sys-color-on-surface-variant);
   /* Épingles : les 4 couleurs Google de l'étincelle Gemini, tonalité 45 (blanc ≥ 5,3:1) ; jaune + encre foncée ; bord tonalité 30 */
   --pin-visit:#1267d4; --pin-visit-ink:#ffffff; --pin-visit-rim:#004494;
   --pin-party:#cb2c22; --pin-party-ink:#ffffff; --pin-party-rim:#930004;
   --pin-food:#007c33;  --pin-food-ink:#ffffff;  --pin-food-rim:#005320;
   --pin-bar:#fbbc04;   --pin-bar-ink:#1f1f1f;   --pin-bar-rim:#987100;
+  --pin-curio:#7b4fc0; --pin-curio-ink:#ffffff; --pin-curio-rim:#4a2a85; /* violet du dégradé Gemini, blanc 5,6:1 */
   --pin-ess:var(--md-sys-color-surface-container-lowest); --pin-ess-ink:var(--md-sys-color-on-surface-variant);
   --pin-done:#6b6e6d;  --pin-done-ink:#ffffff;  --pin-done-rim:#4a4c4b;
   --pin-base:var(--md-sys-color-inverse-surface); --pin-base-ink:var(--md-sys-color-inverse-on-surface);
@@ -131,7 +132,7 @@
   --gem-elev-1:0 0 0 1px rgb(255 255 255/.04); --gem-elev-2:0 0 20px rgb(0 0 0/.4);
   --md-elev-3:0 0 0 1px rgb(255 255 255/.06),0 4px 12px rgb(0 0 0/.5);
   --surface-2:var(--md-sys-color-surface-container-highest);
-  --c-visit:#adc6ff; --c-food:#6ddd81; --c-bar:#fbbc05; --c-party:#ffb4a9;
+  --c-visit:#adc6ff; --c-food:#6ddd81; --c-bar:#fbbc05; --c-party:#ffb4a9; --c-curio:#d0bcff;
   --pin-done:#a6a9a8; --pin-done-ink:#000000; --pin-done-rim:#747775;
   --route:#a8c7fa;
   --tiles-filter:invert(1) hue-rotate(200deg) saturate(.25) brightness(.78) contrast(.92);
@@ -156,7 +157,7 @@
   --gem-elev-1:0 0 0 1px rgb(255 255 255/.04); --gem-elev-2:0 0 20px rgb(0 0 0/.4);
   --md-elev-3:0 0 0 1px rgb(255 255 255/.06),0 4px 12px rgb(0 0 0/.5);
   --surface-2:var(--md-sys-color-surface-container-highest);
-  --c-visit:#adc6ff; --c-food:#6ddd81; --c-bar:#fbbc05; --c-party:#ffb4a9;
+  --c-visit:#adc6ff; --c-food:#6ddd81; --c-bar:#fbbc05; --c-party:#ffb4a9; --c-curio:#d0bcff;
   --pin-done:#a6a9a8; --pin-done-ink:#000000; --pin-done-rim:#747775;
   --route:#a8c7fa;
   --tiles-filter:invert(1) hue-rotate(200deg) saturate(.25) brightness(.78) contrast(.92);
@@ -186,15 +187,15 @@ a{color:var(--md-sys-color-primary)}
 svg.i{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
 /* Couche d'état M3 : survol 8 %, focus 10 %, appui 10 % de la couleur du contenu */
-.btn,.chip,.seg button,.li,.tl .item,.ess button,.mapctl button,#sheet .close,#toast button,.wx,summary.label,.tel a,#sheet .grab{
+.btn,.chip,.enc,details.story>summary,.seg button,.li,.tl .item,.ess button,.mapctl button,#sheet .close,#toast button,.wx,summary.label,.tel a,#sheet .grab{
   background-image:linear-gradient(color-mix(in srgb,currentColor var(--sl),transparent),color-mix(in srgb,currentColor var(--sl),transparent));
   transition:--sl var(--spring-fast-effects)}
-@media (hover:hover){ .btn:hover,.chip:hover,.seg button:hover,.li:hover,.tl .item:hover,.ess button:hover,.mapctl button:hover,#sheet .close:hover,#toast button:hover,.wx:hover,summary.label:hover,.tel a:hover{--sl:8%} }
+@media (hover:hover){ .btn:hover,.chip:hover,.enc:hover,details.story>summary:hover,.seg button:hover,.li:hover,.tl .item:hover,.ess button:hover,.mapctl button:hover,#sheet .close:hover,#toast button:hover,.wx:hover,summary.label:hover,.tel a:hover{--sl:8%} }
 .btn:focus-visible,.chip:focus-visible,.seg button:focus-visible,.li:focus-visible,.tl .item:focus-visible,.ess button:focus-visible,.mapctl button:focus-visible{--sl:10%}
-.btn:active,.chip:active,.seg button:active,.li:active,.tl .item:active,.ess button:active,.mapctl button:active,#sheet .close:active,#toast button:active,.wx:active,summary.label:active,.tel a:active,#sheet .grab:active{--sl:10%}
+.btn:active,.chip:active,.enc:active,details.story>summary:active,.seg button:active,.li:active,.tl .item:active,.ess button:active,.mapctl button:active,#sheet .close:active,#toast button:active,.wx:active,summary.label:active,.tel a:active,#sheet .grab:active{--sl:10%}
 
 /* Cible tactile 48 dp (motif material-web « touch target ») sur tout contrôle visuellement plus petit */
-.btn::after,.chip::after,.seg button::after,.mapctl button::after,#sheet .close::after,.tel a::after,#toast button::after{
+.btn::after,.chip::after,.enc::after,.seg button::after,.mapctl button::after,#sheet .close::after,.tel a::after,#toast button::after{
   content:"";position:absolute;top:50%;left:50%;width:max(100%,48px);height:max(100%,48px);transform:translate(-50%,-50%)}
 .mappeek .chips{padding:8px 0!important;margin:0!important}
 .ck a.t{display:inline-block;padding:14px 0;margin:-14px 0}
@@ -294,6 +295,8 @@ body.is-offline .offline{display:block}
 .seg button{position:relative;flex:1;height:40px;min-height:40px;border:0;border-radius:var(--md-shape-full);background-color:transparent;color:var(--ink-2);
   font:var(--md-label-l);letter-spacing:.1px;transition:background-color var(--spring-fast-effects),color var(--spring-fast-effects),--sl var(--spring-fast-effects)}
 .seg button[aria-pressed="true"]{background-color:var(--gem-accent);color:var(--gem-on-accent);font-weight:600;box-shadow:var(--gem-elev-1)}
+.seg button{min-width:0;padding:0 4px;white-space:nowrap}
+@media (max-width:359px){ .seg{gap:2px} .seg button{font-size:13px;letter-spacing:0;padding:0 2px} }
 
 /* Badges de fiabilité, étiquettes d'état, échéances */
 .conf{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px 0 6px;border-radius:var(--md-shape-full);border:0;font:var(--md-label-m);letter-spacing:.3px;white-space:nowrap}
@@ -315,8 +318,9 @@ body.is-offline .offline{display:block}
 .shape[data-cat="party"],.pin[data-cat="party"]{--pf:var(--pin-party);--pi:var(--pin-party-ink);--pr:var(--pin-party-rim)}
 .shape[data-cat="food"],.pin[data-cat="food"]{--pf:var(--pin-food);--pi:var(--pin-food-ink);--pr:var(--pin-food-rim)}
 .shape[data-cat="bar"],.pin[data-cat="bar"]{--pf:var(--pin-bar);--pi:var(--pin-bar-ink);--pr:var(--pin-bar-rim)}
+.shape[data-cat="curio"],.pin[data-cat="curio"]{--pf:var(--pin-curio);--pi:var(--pin-curio-ink);--pr:var(--pin-curio-rim)}
 .shape.done,.pin.done{--pf:var(--pin-done);--pi:var(--pin-done-ink);--pr:var(--pin-done-rim)}
-.cat-visit{color:var(--c-visit)} .cat-food{color:var(--c-food)} .cat-bar{color:var(--c-bar)} .cat-party{color:var(--c-party)}
+.cat-visit{color:var(--c-visit)} .cat-food{color:var(--c-food)} .cat-bar{color:var(--c-bar)} .cat-party{color:var(--c-party)} .cat-curio{color:var(--c-curio)}
 
 /* Carte « Ensuite » */
 .next{border:0;border-radius:var(--md-shape-xli);padding:var(--s-5);box-shadow:var(--gem-elev-2)}
@@ -604,3 +608,30 @@ h1.dayh{font:var(--md-display-s);font-variation-settings:var(--rond);letter-spac
 .kv ul{margin:0;padding-left:20px;font:var(--md-body-m)}
 .kv li{margin:4px 0}
 .kv p + p{margin-top:8px}
+
+/* Culture : curiosités « en chemin » et histoires courtes (17/10/2026) */
+.en{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px}
+.en .lead{display:inline-flex;align-items:center;gap:4px;font:var(--md-label-m);letter-spacing:.3px;color:var(--c-curio);margin-right:2px}
+.en .lead .ms{font-variation-settings:"FILL" 1}
+.enc{position:relative;display:inline-flex;align-items:center;height:36px;padding:0 12px;border:1px solid color-mix(in srgb,var(--c-curio) 35%,transparent);
+  border-radius:var(--md-shape-full);background-color:color-mix(in srgb,var(--c-curio) 8%,var(--surface));color:var(--ink);font:var(--md-label-l);letter-spacing:.1px;
+  max-width:100%;min-width:0;cursor:pointer}
+.enc>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.enc.done{color:var(--ink-2);text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 50%,transparent)}
+.next .en{margin-top:var(--s-3)}
+.fun{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;padding:10px 14px;border-radius:var(--md-shape-l);
+  background:color-mix(in srgb,var(--c-curio) 9%,var(--surface));font:var(--md-body-m);letter-spacing:.2px;color:var(--ink)}
+.fun .ms{color:var(--c-curio);font-variation-settings:"FILL" 1;margin-top:1px}
+.ssrc{margin:8px 0 0;line-height:1.5} .ssrc a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--gem-hair);text-underline-offset:2px}
+.story-kv p{margin:0 0 0} .story-kv p+p{margin-top:8px}
+details.story{margin-top:var(--s-3);border-radius:var(--md-shape-l);background:var(--surface-2)}
+details.story>summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border-radius:var(--md-shape-l);cursor:pointer;
+  font:var(--md-label-l);letter-spacing:.1px;color:var(--ink)}
+details.story>summary::-webkit-details-marker{display:none}
+details.story>summary>.ms:first-child{color:var(--c-curio)}
+details.story>summary .chev{transition:transform var(--spring-fast-spatial)}
+details.story[open]>summary .chev{transform:rotate(180deg)}
+details.story>p{margin:0;padding:0 14px 12px;font:var(--md-body-m);letter-spacing:.2px;color:var(--ink-2)}
+details.story>p.fun{margin:0 10px 10px;padding:10px 14px;color:var(--ink)}
+details.story>p.ssrc{padding-bottom:14px}
+@media (max-width:359px){ .enc{padding:0 10px} }
