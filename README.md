@@ -10,9 +10,16 @@ logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_ap
   du jour, les soirées du soir, ce qui est ouvert à moins de 15 min, les toilettes, distributeurs,
   supermarchés et pharmacies les plus proches. Une journée va de 06:00 à 06:00.
 - **Carte** : épingles en goutte façon Google Maps (bleu = visite, rouge = soirée, jaune = bar,
-  vert = manger), parcours numéroté du jour, calques des essentiels, coche automatique par GPS.
-- **Lieux** : bars triés par prix du petit verre, manger, soirées par jour, visites ; filtres
+  vert = manger, violet = insolite), parcours numéroté du jour avec les curiosités du trajet,
+  calques des essentiels, coche automatique par GPS.
+- **Lieux** : bars triés par prix du petit verre, manger, soirées par jour, visites, insolite ; filtres
   ouvert maintenant, moins de 15 min, pas cher, à faire.
+- **Culture** : une histoire courte et sourcée pour chaque étape du plan (sauf 5 snacks et soirées sans
+  histoire publiée), avec l'anecdote drôle quand elle existe (les légendes sont dites légendes).
+  17 curiosités gratuites « en chemin », placées sur le trajet qui mène à l'étape (Condomerie,
+  Oude Kerk, Lieverdje, Westerkerk, passage du Rijksmuseum, Kattenkabinet...). Mercredi, l'apéro passe
+  au Café 't Smalle (ancienne distillerie de 1780, terrasse sur le canal) ; mardi, De Drie Fleschjes
+  sert de plan B à Wynand Fockink. Recherches du 17/10/2026.
 - **Programme** : un secteur par jour (mar. vieux centre, mer. Jordaan et Ouest, jeu. Sud,
   ven. Noord), avec le mode de transport de chaque trajet, le retour de nuit et Fait / Passer.
 - **Stop** : Paris → Bruxelles (lun. 26, nuit à Bruxelles), Bruxelles → Rotterdam → Amsterdam (mar. 27)
