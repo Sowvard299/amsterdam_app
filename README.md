@@ -26,13 +26,17 @@ logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_ap
   et retour Amsterdam → Paris (sam. 31). Pour chaque trajet : spots classés (attente médiane et note
   calculées sur le dump Hitchmap, ODbL), accès en transports vérifiés sur Transitous, pancartes,
   heure limite avant le plan B, lits à Bruxelles, règles de droit (FR, BE, NL) et sécurité à deux.
-  La carte du trajet s'affiche dans Aujourd'hui le lundi, le mardi jusqu'à l'auberge et le samedi.
+  La carte du trajet s'affiche dans Aujourd'hui le lundi, le mardi jusqu'à l'auberge et le samedi, avec la météo
+  prévue au départ et à l'arrivée (Open-Meteo, gardée hors ligne), un bouton « Envoyer notre position » (message
+  prêt avec lien Google Maps et plaque à compléter) et des plans B chiffrés (horaires et prix FlixBus relevés le 17/10).
 - **Infos** : liste « avant de partir », urgences, auberge, règles pour se déplacer (à pied, tram,
   ferry, bus de nuit, vélo, taxi), ferries en direct, réglages.
 
 Chaque prix, horaire et soirée garde sa source, sa date et un niveau de confiance
 (sûr / probable / à vérifier). Données vérifiées le 15/10/2026, plan par secteurs et transports
-mesurés le 16/10/2026 (marche OSRM, itinéraires Transitous, tarifs GVB 2026).
+mesurés le 16/10/2026 (marche OSRM, itinéraires Transitous, tarifs GVB 2026). Audit du 17/10/2026 :
+liens, horaires et prix des étapes du plan, billetteries des soirées, transports recalculés à l'heure d'hiver
+(UTC+1 dès le 25/10), spots de stop recalculés sur le dump Hitchmap ; les fiches revérifiées affichent « vérifié le 17 oct. ».
 
 Charte : DA Gemini (« Neural Expressive », relevée sur gemini.google.com le 16/10/2026) : fond neutre
 #FAF9F9 / noir, surfaces blanches ou #1C1C1C, tout en pilule, icônes fines Material Symbols, titres

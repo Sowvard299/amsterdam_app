@@ -1,6 +1,6 @@
 // Hors ligne : l'appli (coquille + données) est servie depuis le cache puis rafraîchie en arrière-plan.
 // Tuiles OSM : seulement celles déjà affichées (aucun préchargement, politique d'OSM), 800 au plus.
-const VERSION = "ams-v5-culture-2026-10-17";
+const VERSION = "ams-v6-audit-2026-10-17";
 const SHELL = ["./", "index.html", "app.css", "app.js", "data.js", "ess.js", "manifest.json", "icon.svg", "icon-192.png", "icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
@@ -8,7 +8,8 @@ const SHELL = ["./", "index.html", "app.css", "app.js", "data.js", "ess.js", "ma
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"];
 const TILES = "ams-tiles", FONTS = "ams-fonts", MAX_TILES = 800;
 
-self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
+// cache: "reload" : sans lui, le cache HTTP de GitHub Pages (max-age=600) peut remettre l'ancien data.js dans la nouvelle version
+self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(
   caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("ams-v") && k !== VERSION || k === "ams-trip-v1").map(k => caches.delete(k))))
     .then(() => self.clients.claim())));
@@ -42,7 +43,8 @@ self.addEventListener("fetch", e => {
   // Coquille et données : cache d'abord, mise à jour en arrière-plan
   e.respondWith(caches.open(VERSION).then(async c => {
     const hit = await c.match(req, { ignoreSearch: url.origin === location.origin });
-    const net = fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit);
+    const fresh = url.origin === location.origin ? new Request(url.href, { cache: "no-cache", credentials: "same-origin" }) : req; // revalide auprès du serveur
+    const net = fetch(fresh).then(r => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit);
     return hit || net;
   }));
 });
