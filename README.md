@@ -15,6 +15,11 @@ logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_ap
   ouvert maintenant, moins de 15 min, pas cher, à faire.
 - **Programme** : un secteur par jour (mar. vieux centre, mer. Jordaan et Ouest, jeu. Sud,
   ven. Noord), avec le mode de transport de chaque trajet, le retour de nuit et Fait / Passer.
+- **Stop** : Paris → Bruxelles (lun. 26, nuit à Bruxelles), Bruxelles → Rotterdam → Amsterdam (mar. 27)
+  et retour Amsterdam → Paris (sam. 31). Pour chaque trajet : spots classés (attente médiane et note
+  calculées sur le dump Hitchmap, ODbL), accès en transports vérifiés sur Transitous, pancartes,
+  heure limite avant le plan B, lits à Bruxelles, règles de droit (FR, BE, NL) et sécurité à deux.
+  La carte du trajet s'affiche dans Aujourd'hui le lundi, le mardi jusqu'à l'auberge et le samedi.
 - **Infos** : liste « avant de partir », urgences, auberge, règles pour se déplacer (à pied, tram,
   ferry, bus de nuit, vélo, taxi), ferries en direct, réglages.
 

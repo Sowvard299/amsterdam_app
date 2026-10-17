@@ -587,3 +587,20 @@ h1.dayh{font:var(--md-display-s);font-variation-settings:var(--rond);letter-spac
   .next .btn.primary::before,#onboard > .btn.primary::before{animation:none!important}
 }
 @media (max-width:359px){ .ess button{gap:8px;padding:0 10px} .ess button .ms{width:32px;height:32px;font-size:18px} }
+
+/* Stop : pancartes façon carton, blocs de spots */
+.signs{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s-3)}
+.signc{display:inline-flex;align-items:center;min-height:32px;padding:4px 12px;border-radius:var(--md-shape-s);background:#efe3cc;color:#1f1f1f;
+  font:700 .875rem/1.2 var(--font-plain);letter-spacing:.06em;text-transform:uppercase;box-shadow:inset 0 0 0 1px rgb(0 0 0/.12)}
+.next.hitch h3{margin-top:8px}
+.next.hitch .alert{align-items:flex-start}
+.hs{padding:var(--s-3) 0;border-bottom:1px solid var(--md-sys-color-outline-variant)}
+.hs:last-child{border-bottom:0}
+.hs .row{gap:var(--s-3)}
+.hs .shape{width:32px;height:32px}
+.hs .shape .ms{font-size:18px}
+.hs p{margin:8px 0 0;font:var(--md-body-m)}
+.hs .btns{margin-top:var(--s-3);flex-wrap:wrap}
+.kv ul{margin:0;padding-left:20px;font:var(--md-body-m)}
+.kv li{margin:4px 0}
+.kv p + p{margin-top:8px}
