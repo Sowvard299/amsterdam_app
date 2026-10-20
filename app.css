@@ -641,3 +641,418 @@ details.story>ul.rl li+li{margin-top:6px}
 details.rules>summary>.ms:first-child{color:var(--warn)}
 @media (max-width:359px){ .enc{padding:0 10px} }
 .hwx{display:flex;gap:6px;align-items:flex-start;margin:8px 0 0}.hwx:empty{display:none}.hwx .ms{flex:none;margin-top:2px;color:var(--ink-2)}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   DA « Néon Nuit » (2026-10-20) : surcharge tout ce qui précède. Polices chargées dans index.html.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* Chiffres d'Inter dans les titres en Space Grotesk (son « 1 » à drapeau se lit mal : « 10 jaar », « A1 »).
+   Même fichier que l'Inter de index.html, donc rien de plus à télécharger ; s'il manque, Space Grotesk prend le relais. */
+@font-face{font-family:"Chiffres";font-style:normal;font-weight:100 900;font-display:swap;unicode-range:U+0030-0039;
+  src:url(https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2) format("woff2")}
+/* Proposition 2 : « Néon Nuit » (chargée après app.css).
+   Space Grotesk pour les titres ≥ 20 px et les grands chiffres, Inter pour tout le texte et l'interface.
+   Sombre d'abord : fond indigo presque noir, néons cyan → bleu → violet → magenta → pêche (étincelle Gemini).
+   Clair = version « jour » : fond clair, mais bandeau du jour et barre d'onglets indigo nuit.
+   Le néon ne sert qu'à montrer quoi regarder : anneau + lueur de la carte « Ensuite », halo du bouton « Y aller »,
+   soulignement du titre du jour, onglet actif, point « prochaine étape ». Jamais de texte lumineux (pas de text-shadow).
+   Contrastes AA vérifiés sur les couleurs calculées (harnais dashot). Une seule animation : la respiration du halo
+   de « Y aller », coupée sous prefers-reduced-motion. */
+
+/* ══════════ Jetons : clair (« jour ») ══════════ */
+:root{
+  --md-sys-color-primary:#4a32d4; --md-sys-color-on-primary:#ffffff;
+  --md-sys-color-primary-container:#e8e3ff; --md-sys-color-on-primary-container:#25137a; --md-sys-color-inverse-primary:#9ff0ff;
+  --md-sys-color-secondary:#6d28d9; --md-sys-color-on-secondary:#ffffff;
+  --md-sys-color-secondary-container:#dcf4fb; --md-sys-color-on-secondary-container:#053c4b;
+  --md-sys-color-tertiary:#c2410c; --md-sys-color-on-tertiary:#ffffff;
+  --md-sys-color-tertiary-container:#ffe1d1; --md-sys-color-on-tertiary-container:#4a1600;
+  --md-sys-color-error:#c0133d; --md-sys-color-on-error:#ffffff; --md-sys-color-error-container:#ffe0e6; --md-sys-color-on-error-container:#7a0a26;
+  --md-sys-color-surface:#f5f4fa; --md-sys-color-on-surface:#15132b; --md-sys-color-on-surface-variant:#4b4868;
+  --md-sys-color-surface-dim:#eceaf6; --md-sys-color-surface-bright:#ffffff;
+  --md-sys-color-surface-container-lowest:#ffffff; --md-sys-color-surface-container-low:#f8f7fc; --md-sys-color-surface-container:#f0eef8;
+  --md-sys-color-surface-container-high:#e9e7f3; --md-sys-color-surface-container-highest:#e1def0;
+  --md-sys-color-outline:#706d8c; --md-sys-color-outline-variant:#d3d0e4;
+  --md-sys-color-inverse-surface:#15132b; --md-sys-color-inverse-on-surface:#f3f1ff;
+  --md-ext-ok:#047857; --md-ext-ok-container:#d6f7e6; --md-ext-on-ok-container:#053d27;
+  --md-ext-warn:#8a4a00; --md-ext-warn-container:#ffefd9; --md-ext-on-warn-container:#5c2b00;
+  --md-ext-visit-container:#dde6ff; --md-ext-on-visit-container:#0b2a78;
+  --md-ext-party-container:#ffe0ef; --md-ext-on-party-container:#6b0a3c;
+  --md-ext-bar-container:#ffefc2;   --md-ext-on-bar-container:#4a2f00;
+  --md-ext-food-container:#d6f7e6;  --md-ext-on-food-container:#053d27;
+
+  --gem-accent:#4a32d4; --gem-on-accent:#ffffff;            /* « Y aller » : violet électrique (= couleur de l'heure) + halo néon */
+  --gem-tonal:#eceaf6; --gem-on-tonal:#3b22c4;              /* petits boutons : neutres, jamais teintés d'accent */
+  --gem-glow:#c9b8ff;
+  --gem-hair:rgb(19 16 47 / .12);
+  --gem-grad-text:linear-gradient(90deg,#3b1fd1 0%,#6d28d9 55%,#a3127a 100%);
+  --gem-halo:linear-gradient(100deg,#20d7ff 0%,#3186ff 26%,#8b5cf6 52%,#ff3fb4 78%,#ff9e7a 100%);
+  --gem-wash:none;
+  --gem-elev-1:0 0 0 1px rgb(19 16 47 / .06),0 1px 3px rgb(19 16 47 / .06);
+  --gem-elev-2:0 0 0 1px rgb(19 16 47 / .06),0 8px 24px -8px rgb(19 16 47 / .18);
+  --md-elev-3:0 2px 8px -2px rgb(19 16 47 / .18),0 0 20px rgb(19 16 47 / .06);
+
+  --c-visit:#1d4ed8; --c-food:#047857; --c-bar:#8a5300; --c-party:#c0136a; --c-curio:#6d28d9;
+  --pin-visit:#2563eb; --pin-visit-ink:#ffffff; --pin-visit-rim:#1e3a8a;
+  --pin-party:#d0247a; --pin-party-ink:#ffffff; --pin-party-rim:#831049;
+  --pin-food:#047857;  --pin-food-ink:#ffffff;  --pin-food-rim:#064e3b;
+  --pin-bar:#fbbf24;   --pin-bar-ink:#15132b;   --pin-bar-rim:#a16207;
+  --pin-curio:#7c3aed; --pin-curio-ink:#ffffff; --pin-curio-rim:#4c1d95;
+  --pin-done:#6f6c8a;  --pin-done-ink:#ffffff;  --pin-done-rim:#4b4868;
+  --me:#3186ff; --route:#0e7490;
+
+  --font-brand:"Chiffres","Space Grotesk","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-plain:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --md-display-m:700 2.75rem/3.125rem var(--font-brand);
+  --md-display-s:600 2rem/2.375rem var(--font-brand);
+  --md-headline-l:600 1.75rem/2.125rem var(--font-brand);
+  --md-headline-m:600 1.625rem/2rem var(--font-brand);
+  --md-headline-s:600 1.375rem/1.75rem var(--font-brand);
+  --md-title-l:600 1.25rem/1.5rem var(--font-brand);
+  --md-title-m:600 1rem/1.375rem var(--font-plain);
+  --md-title-s:600 .875rem/1.25rem var(--font-plain);
+  --md-body-l:400 1rem/1.5rem var(--font-plain);
+  --md-body-m:400 .9375rem/1.4375rem var(--font-plain);
+  --md-body-s:400 .8125rem/1.1875rem var(--font-plain);
+  --md-label-l:500 .875rem/1.25rem var(--font-plain);
+  --md-label-m:500 .75rem/1rem var(--font-plain);
+  --md-label-s:500 .6875rem/1rem var(--font-plain);
+  --rond:normal;
+
+  /* Néon Nuit */
+  --neon-c:#20d7ff; --neon-b:#3186ff; --neon-v:#8b5cf6; --neon-m:#ff3fb4; --neon-p:#ff9e7a;
+  --neon-grad:linear-gradient(90deg,var(--neon-c),var(--neon-b) 26%,var(--neon-v) 52%,var(--neon-m) 78%,var(--neon-p));
+  --band:#13102f; --band-ink:#ffffff; --band-ink-2:#d2cdf2;
+  --band-img:radial-gradient(60% 110% at 104% 112%,rgb(32 215 255 / .34),transparent 70%),
+             radial-gradient(60% 110% at -4% 112%,rgb(255 63 180 / .32),transparent 70%),
+             radial-gradient(70% 95% at 50% 128%,rgb(139 92 246 / .62),transparent 76%);
+  --band-glow:0 16px 36px -18px rgb(139 92 246 / .75),0 10px 28px -20px rgb(32 215 255 / .6);
+  --tabs-bg:#13102f; --tabs-ink:#bab6dc; --tabs-on:#9ff0ff;
+  --next-glow:0 16px 40px -14px rgb(139 92 246 / .45),0 0 36px -10px rgb(32 215 255 / .40),0 2px 6px rgb(19 16 47 / .06);
+  --primary-img:none;
+  --halo-o:.7;
+  --act-bg:#13102f; --act-ink:#ffffff;
+  --act-ring:0 0 0 1px rgb(139 92 246 / .35),0 4px 14px -4px rgb(139 92 246 / .55);
+  --sheet-glow:0 -14px 40px -18px rgb(139 92 246 / .6);
+  --primary-glow:0 8px 22px -8px rgb(139 92 246 / .7),0 0 18px -8px rgb(32 215 255 / .6);
+  --peek-glow:0 0 22px -8px rgb(139 92 246 / .5);
+}
+
+/* ══════════ Jetons : sombre (nuit) — deux sélecteurs, mêmes valeurs ══════════ */
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --md-sys-color-primary:#7ee8ff; --md-sys-color-on-primary:#00262f;
+  --md-sys-color-primary-container:#2a1f66; --md-sys-color-on-primary-container:#e4dcff; --md-sys-color-inverse-primary:#4a32d4;
+  --md-sys-color-secondary:#c4b5fd; --md-sys-color-on-secondary:#1f0f5c;
+  --md-sys-color-secondary-container:#14304a; --md-sys-color-on-secondary-container:#c6f3ff;
+  --md-sys-color-tertiary:#ffb27a; --md-sys-color-on-tertiary:#4a1d00; --md-sys-color-tertiary-container:#5c2a0a; --md-sys-color-on-tertiary-container:#ffdcc7;
+  --md-sys-color-error:#ff8fab; --md-sys-color-on-error:#3d0013; --md-sys-color-error-container:#4a1022; --md-sys-color-on-error-container:#ffd9e1;
+  --md-sys-color-surface:#0a0918; --md-sys-color-on-surface:#f3f1ff; --md-sys-color-on-surface-variant:#bcb9da;
+  --md-sys-color-surface-dim:#14122a; --md-sys-color-surface-bright:#16142c;
+  --md-sys-color-surface-container-lowest:#07061a; --md-sys-color-surface-container-low:#110f25; --md-sys-color-surface-container:#16142c;
+  --md-sys-color-surface-container-high:#1c1a35; --md-sys-color-surface-container-highest:#24213f;
+  --md-sys-color-outline:#8b88ad; --md-sys-color-outline-variant:#34315a;
+  --md-sys-color-inverse-surface:#f3f1ff; --md-sys-color-inverse-on-surface:#15132b;
+  --md-ext-ok:#5eeaa8; --md-ext-ok-container:#0e3326; --md-ext-on-ok-container:#b8f5d6;
+  --md-ext-warn:#ffc27a; --md-ext-warn-container:#33220d; --md-ext-on-warn-container:#ffdcb0;
+  --md-ext-visit-container:#1a2c63; --md-ext-on-visit-container:#d8e2ff; --md-ext-party-container:#5a0d35; --md-ext-on-party-container:#ffd6ea;
+  --md-ext-bar-container:#4a3500; --md-ext-on-bar-container:#ffe7a8; --md-ext-food-container:#0e3326; --md-ext-on-food-container:#b8f5d6;
+  --gem-accent:#8be9ff; --gem-on-accent:#06121a; --gem-tonal:#24213f; --gem-on-tonal:#9ff0ff; --gem-glow:#3d2898;
+  --gem-hair:rgb(255 255 255 / .12);
+  --gem-grad-text:linear-gradient(90deg,#7ee8ff 0%,#c4b5fd 55%,#ffa8dc 100%);
+  --gem-elev-1:0 0 0 1px rgb(255 255 255 / .06); --gem-elev-2:0 0 0 1px rgb(255 255 255 / .06),0 8px 24px rgb(0 0 0 / .5);
+  --md-elev-3:0 0 0 1px rgb(255 255 255 / .08),0 6px 16px rgb(0 0 0 / .55);
+  --surface-2:var(--md-sys-color-surface-container-highest);
+  --c-visit:#8fb8ff; --c-food:#5eeaa8; --c-bar:#ffd257; --c-party:#ff8fcf; --c-curio:#c9b0ff;
+  --pin-done:#a6a3c4; --pin-done-ink:#0a0918; --pin-done-rim:#6f6c8a;
+  --me:#5ee7ff; --route:#7ee8ff;
+  --tiles-filter:invert(1) hue-rotate(205deg) saturate(.4) brightness(.72) contrast(.94);
+  --band:#16112f; --band-ink:#ffffff; --band-ink-2:#d2cdf2;
+  --band-glow:0 18px 44px -18px rgb(139 92 246 / .8),0 10px 30px -20px rgb(32 215 255 / .55);
+  --tabs-bg:#07061a; --tabs-ink:#b3b0d4; --tabs-on:#9ff0ff;
+  --next-glow:0 0 34px -8px rgb(32 215 255 / .38),0 0 64px -14px rgb(255 63 180 / .34);
+  --primary-img:linear-gradient(100deg,#8be9ff 0%,#b9a6ff 55%,#ffa8dc 100%);
+  --halo-o:.6;
+  --act-bg:#163246; --act-ink:#e3fbff;
+  --act-ring:inset 0 0 0 1.5px rgb(126 232 255 / .75),0 0 16px -3px rgb(126 232 255 / .55);
+  --sheet-glow:0 -16px 44px -18px rgb(139 92 246 / .7);
+  --primary-glow:0 0 22px -6px rgb(185 166 255 / .55),0 0 30px -12px rgb(32 215 255 / .55);
+  --peek-glow:0 0 24px -8px rgb(32 215 255 / .35),0 0 36px -14px rgb(255 63 180 / .35);
+}}
+:root[data-theme="dark"]{
+  --md-sys-color-primary:#7ee8ff; --md-sys-color-on-primary:#00262f;
+  --md-sys-color-primary-container:#2a1f66; --md-sys-color-on-primary-container:#e4dcff; --md-sys-color-inverse-primary:#4a32d4;
+  --md-sys-color-secondary:#c4b5fd; --md-sys-color-on-secondary:#1f0f5c;
+  --md-sys-color-secondary-container:#14304a; --md-sys-color-on-secondary-container:#c6f3ff;
+  --md-sys-color-tertiary:#ffb27a; --md-sys-color-on-tertiary:#4a1d00; --md-sys-color-tertiary-container:#5c2a0a; --md-sys-color-on-tertiary-container:#ffdcc7;
+  --md-sys-color-error:#ff8fab; --md-sys-color-on-error:#3d0013; --md-sys-color-error-container:#4a1022; --md-sys-color-on-error-container:#ffd9e1;
+  --md-sys-color-surface:#0a0918; --md-sys-color-on-surface:#f3f1ff; --md-sys-color-on-surface-variant:#bcb9da;
+  --md-sys-color-surface-dim:#14122a; --md-sys-color-surface-bright:#16142c;
+  --md-sys-color-surface-container-lowest:#07061a; --md-sys-color-surface-container-low:#110f25; --md-sys-color-surface-container:#16142c;
+  --md-sys-color-surface-container-high:#1c1a35; --md-sys-color-surface-container-highest:#24213f;
+  --md-sys-color-outline:#8b88ad; --md-sys-color-outline-variant:#34315a;
+  --md-sys-color-inverse-surface:#f3f1ff; --md-sys-color-inverse-on-surface:#15132b;
+  --md-ext-ok:#5eeaa8; --md-ext-ok-container:#0e3326; --md-ext-on-ok-container:#b8f5d6;
+  --md-ext-warn:#ffc27a; --md-ext-warn-container:#33220d; --md-ext-on-warn-container:#ffdcb0;
+  --md-ext-visit-container:#1a2c63; --md-ext-on-visit-container:#d8e2ff; --md-ext-party-container:#5a0d35; --md-ext-on-party-container:#ffd6ea;
+  --md-ext-bar-container:#4a3500; --md-ext-on-bar-container:#ffe7a8; --md-ext-food-container:#0e3326; --md-ext-on-food-container:#b8f5d6;
+  --gem-accent:#8be9ff; --gem-on-accent:#06121a; --gem-tonal:#24213f; --gem-on-tonal:#9ff0ff; --gem-glow:#3d2898;
+  --gem-hair:rgb(255 255 255 / .12);
+  --gem-grad-text:linear-gradient(90deg,#7ee8ff 0%,#c4b5fd 55%,#ffa8dc 100%);
+  --gem-elev-1:0 0 0 1px rgb(255 255 255 / .06); --gem-elev-2:0 0 0 1px rgb(255 255 255 / .06),0 8px 24px rgb(0 0 0 / .5);
+  --md-elev-3:0 0 0 1px rgb(255 255 255 / .08),0 6px 16px rgb(0 0 0 / .55);
+  --surface-2:var(--md-sys-color-surface-container-highest);
+  --c-visit:#8fb8ff; --c-food:#5eeaa8; --c-bar:#ffd257; --c-party:#ff8fcf; --c-curio:#c9b0ff;
+  --pin-done:#a6a3c4; --pin-done-ink:#0a0918; --pin-done-rim:#6f6c8a;
+  --me:#5ee7ff; --route:#7ee8ff;
+  --tiles-filter:invert(1) hue-rotate(205deg) saturate(.4) brightness(.72) contrast(.94);
+  --band:#16112f; --band-ink:#ffffff; --band-ink-2:#d2cdf2;
+  --band-glow:0 18px 44px -18px rgb(139 92 246 / .8),0 10px 30px -20px rgb(32 215 255 / .55);
+  --tabs-bg:#07061a; --tabs-ink:#b3b0d4; --tabs-on:#9ff0ff;
+  --next-glow:0 0 34px -8px rgb(32 215 255 / .38),0 0 64px -14px rgb(255 63 180 / .34);
+  --primary-img:linear-gradient(100deg,#8be9ff 0%,#b9a6ff 55%,#ffa8dc 100%);
+  --halo-o:.6;
+  --act-bg:#163246; --act-ink:#e3fbff;
+  --act-ring:inset 0 0 0 1.5px rgb(126 232 255 / .75),0 0 16px -3px rgb(126 232 255 / .55);
+  --sheet-glow:0 -16px 44px -18px rgb(139 92 246 / .7);
+  --primary-glow:0 0 22px -6px rgb(185 166 255 / .55),0 0 30px -12px rgb(32 215 255 / .55);
+  --peek-glow:0 0 24px -8px rgb(32 215 255 / .35),0 0 36px -14px rgb(255 63 180 / .35);
+}
+
+/* ══════════ Base typographique ══════════ */
+html,body{letter-spacing:0}
+h1,h2,h3,.display{letter-spacing:-.01em}
+
+/* ══════════ Bandeau du jour (Aujourd'hui) : nuit indigo, aurore néon, titre souligné néon ══════════ */
+#s-today .status{background-color:var(--band);color:var(--band-ink)}
+#s-today.scrolled .status{background-color:color-mix(in srgb,var(--band) 94%,transparent);box-shadow:0 1px 0 rgb(255 255 255 / .08)}
+#s-today .wxchip{background-color:rgb(255 255 255 / .10);box-shadow:inset 0 0 0 1px rgb(255 255 255 / .2);color:var(--band-ink)}
+#s-today .wxchip .ms{color:#9ff0ff}
+.flag{margin:0;padding:2px calc(var(--gutter) + 4px) 14px;min-height:0;align-items:flex-start;color:var(--band-ink);
+  background-color:var(--band);background-image:var(--band-img);border-radius:0 0 32px 32px;box-shadow:var(--band-glow)}
+.flag::before{display:none}
+.flag h1,.flag h1.big{color:var(--band-ink);background-image:none;-webkit-text-fill-color:currentColor}
+.flag h1:not(.big){font:600 1.5rem/1.875rem var(--font-brand);letter-spacing:-.015em}
+.flag h1.big{letter-spacing:-.02em}
+.flag h1::after,h1.dayh::after{content:"";display:block;width:64px;height:4px;margin-top:8px;border-radius:4px;background:var(--neon-grad);
+  box-shadow:0 0 10px rgb(139 92 246 / .75),0 0 3px rgb(32 215 255 / .7)}
+.flag p{color:var(--band-ink-2);margin-top:8px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.flag .xxx{display:none}
+/* La carte « Ensuite » chevauche le bas du bandeau : elle flotte sur la nuit, et remonte de ~26 px */
+.flag:has(~ .sec > .next:not([style]):first-child){padding-bottom:44px}
+.flag ~ .sec:has(> .next:not([style]):first-child){position:relative;margin-top:-44px;padding-top:16px}
+/* « Ensuite » d'abord : l'alerte de veille de départ (vendredi soir, 6 lignes) passe sous la carte, pas au-dessus */
+#s-today.screen.active{display:flex;flex-direction:column}
+#s-today>*{flex:none}
+#s-today>.sec:has(> .next:not([style]):first-child)~*{order:2}
+/* Les alertes d'info passent sous « Ensuite » ; l'alerte « Demain, stop à 07:15 » (warn) reste en haut. */
+#s-today>.sec:has(> .alert:only-child:not(.warn)){order:1}
+#s-today>.sec:has(> .alert:only-child:not(.warn)) .alert{box-shadow:none}
+
+/* Programme : titre du jour en encre pleine + même soulignement néon */
+h1.dayh{font:600 1.5rem/1.875rem var(--font-brand);letter-spacing:-.015em;color:var(--ink);background-image:none;-webkit-text-fill-color:currentColor}
+h1.dayh::after{margin-top:8px;margin-bottom:2px}
+
+/* Lueur qui monte du bas (Gemini), en violet nuit */
+#s-today::before{background:radial-gradient(ellipse 50% 50% at 40% 62%,color-mix(in srgb,var(--gem-glow) 85%,transparent) 0%,transparent 70%),
+  radial-gradient(ellipse 40% 45% at 72% 64%,rgb(32 215 255 / .18) 0%,transparent 70%);opacity:.55}
+
+/* ══════════ Cartes ══════════ */
+.card{box-shadow:var(--gem-elev-1)}
+/* Carte « Ensuite » : anneau dégradé + lueur néon = la chose à regarder */
+.next{border:2px solid transparent;border-radius:var(--md-shape-xli);background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--gem-halo) border-box;
+  background-color:var(--surface);box-shadow:var(--next-glow)}
+.next .when{gap:8px;font:700 1.25rem/1.625rem var(--font-plain);letter-spacing:-.01em;color:var(--md-sys-color-primary);font-variant-numeric:tabular-nums}
+.next .when .ms{font-size:22px}
+.next.hitch .when{font:600 1rem/1.375rem var(--font-plain);gap:6px}
+.next.hitch .when .ms{font-size:20px}
+.next h3{font:600 1.5rem/1.875rem var(--font-brand);letter-spacing:-.02em;color:var(--ink)}
+.next .price{font:600 1.0625rem/1.5rem var(--font-plain);color:var(--ink)}
+.next .why{letter-spacing:0}
+.next .meta{color:var(--ink-2)}
+
+/* ══════════ Boutons ══════════ */
+.btn{letter-spacing:0}
+.btn.primary{background-color:var(--gem-accent);color:var(--gem-on-accent);font-weight:600;
+  background-image:linear-gradient(color-mix(in srgb,currentColor var(--sl),transparent),color-mix(in srgb,currentColor var(--sl),transparent)),var(--primary-img)}
+.btns.lg .btn{font:600 1rem/1.25rem var(--font-plain);letter-spacing:0}
+.btns.lg .btn:not(.primary){background-color:transparent;color:var(--ink);border:1px solid var(--line-strong)}
+/* « Y aller » seul sur sa ligne, pleine largeur : impossible à rater, atteignable au pouce ; Fait / Passer dessous */
+.next .btns.lg{flex-wrap:wrap;gap:10px 8px}
+.next .btns.lg .btn.primary{flex:1 0 100%}
+.next .btns.lg .btn:not(.primary):not(.icon){flex:1 1 0;min-width:0}
+.btns.lg .btn.icon{flex:none}
+/* Halo néon de « Y aller » : dégradé linéaire flou, respire doucement (seule animation) */
+.next .btn.primary::before,#onboard > .btn.primary::before{inset:-2px;background:var(--gem-halo);filter:blur(10px);opacity:var(--halo-o);
+  animation:p2-breathe 3.6s ease-in-out infinite}
+@keyframes p2-breathe{0%,100%{opacity:var(--halo-o)}50%{opacity:1}}
+.btn.ghost{color:var(--gem-on-tonal)}
+
+/* ══════════ Barre d'onglets : nuit dans les deux modes, filet néon, onglet actif lumineux ══════════ */
+nav.tabs{background-color:var(--tabs-bg);
+  background-image:linear-gradient(90deg,rgb(32 215 255 / 0),rgb(32 215 255 / .8) 18%,rgb(139 92 246 / .9) 50%,rgb(255 63 180 / .8) 82%,rgb(255 63 180 / 0));
+  background-size:100% 1px;background-repeat:no-repeat;box-shadow:0 -6px 18px -12px rgb(139 92 246 / .3)}
+nav.tabs button{color:var(--tabs-ink);letter-spacing:.1px}
+nav.tabs button[aria-selected="true"]{color:var(--tabs-on);font-weight:600}
+nav.tabs button::before{background:linear-gradient(100deg,rgb(32 215 255 / .30),rgb(139 92 246 / .45) 55%,rgb(255 63 180 / .34));
+  box-shadow:inset 0 0 0 1px rgb(159 240 255 / .45),0 0 16px -2px rgb(139 92 246 / .75)}
+nav.tabs button[aria-selected="true"] .ms{color:#ffffff;font-variation-settings:"FILL" 1,"wght" 400}
+@media (hover:hover){ nav.tabs button:hover::after{opacity:.1} }
+@media (max-width:359px){ nav.tabs button{font-size:.6875rem;letter-spacing:0} }
+
+/* ══════════ États actifs (filtres, groupes) ══════════ */
+.seg button[aria-pressed="true"]{background-color:var(--act-bg);color:var(--act-ink);box-shadow:var(--act-ring)}
+.chip{color:var(--ink);border-color:var(--md-sys-color-outline-variant)}
+.chip[aria-pressed="true"],.mapchips .chip[aria-pressed="true"]{background-color:var(--act-bg);color:var(--act-ink);box-shadow:var(--act-ring);border-color:transparent}
+.chip[aria-pressed="true"] .ms{color:inherit}
+.mapctl button.loc{box-shadow:0 0 0 1px rgb(255 255 255 / .08),0 0 20px -2px rgb(139 92 246 / .7)}
+.mapctl button.loc{background-image:linear-gradient(color-mix(in srgb,currentColor var(--sl),transparent),color-mix(in srgb,currentColor var(--sl),transparent)),var(--primary-img)}
+
+/* ══════════ Frise ══════════ */
+.tl li.isnext .dot{border:0;background:linear-gradient(135deg,var(--neon-c),var(--neon-v) 55%,var(--neon-m));
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--neon-v) 18%,transparent),0 0 12px color-mix(in srgb,var(--neon-v) 75%,transparent)}
+.tl li.isnext .time{color:var(--md-sys-color-primary);font-weight:700}
+.tl li.done .rail::before{background:var(--md-sys-color-primary);opacity:.45}
+
+/* ══════════ Fiche, carte, détails néon ══════════ */
+#sheet{box-shadow:var(--sheet-glow),var(--md-elev-4)}
+#sheet .grab span{width:40px;background:var(--neon-grad);opacity:1;box-shadow:0 0 8px rgb(139 92 246 / .6)}
+#sheet .head h2{letter-spacing:-.01em}
+/* Toute action principale hors carte « Ensuite » : même lueur néon, fixe (pas d'animation) */
+#sheet .btn.primary,.sec>.btn.primary,.card:not(.next) .btns .btn.primary{box-shadow:var(--primary-glow)}
+.mappeek{box-shadow:0 -12px 32px -16px rgb(139 92 246 / .55),var(--md-elev-3)}
+.mappeek .handle{background:var(--neon-grad);opacity:1;width:40px}
+/* Carte : la prochaine étape porte le même anneau néon que la carte « Ensuite », et l'heure se lit d'abord */
+.mappeek>.li{border:2px solid transparent;border-radius:var(--md-shape-li);
+  background:linear-gradient(color-mix(in srgb,currentColor var(--sl),transparent),color-mix(in srgb,currentColor var(--sl),transparent)) padding-box,
+    linear-gradient(var(--surface-sheet),var(--surface-sheet)) padding-box,var(--gem-halo) border-box;
+  background-color:var(--surface-sheet);box-shadow:var(--peek-glow)!important}
+.mappeek>.li .sub{font:600 .9375rem/1.25rem var(--font-plain);color:var(--md-sys-color-primary);font-variant-numeric:tabular-nums}
+.mappeek>.li .nm{font:600 1.125rem/1.5rem var(--font-brand);letter-spacing:-.01em}
+.mappeek>.li .pr{font:600 1rem/1.25rem var(--font-plain)}
+.progress span{background:var(--neon-grad)}
+.hours .bar span{background:linear-gradient(180deg,var(--neon-c),var(--neon-v))}
+.clu{box-shadow:0 0 0 1px rgb(255 255 255 / .1),0 0 14px color-mix(in srgb,var(--md-sys-color-primary) 55%,transparent)}
+.wx b{font:600 1.625rem/2rem var(--font-plain);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+/* Fiche : le prix recule derrière le nom du lieu */
+#sheet .head .price{font:600 1.0625rem/1.5rem var(--font-plain)!important;color:var(--ink)}
+#sheet .head h2{font-weight:700}
+
+/* Sombre : épingles et pastilles de catégorie à lueur néon */
+:root[data-theme="dark"] .pin svg{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--pf) 70%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .5))}
+:root[data-theme="dark"] .shape:not(.done){box-shadow:0 0 14px -3px color-mix(in srgb,var(--pf,transparent) 80%,transparent)}
+:root[data-theme="dark"] .alert.warn{box-shadow:inset 0 0 0 1px rgb(255 194 122 / .22)}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .pin svg{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--pf) 70%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .5))}
+  :root:not([data-theme="light"]) .shape:not(.done){box-shadow:0 0 14px -3px color-mix(in srgb,var(--pf,transparent) 80%,transparent)}
+  :root:not([data-theme="light"]) .alert.warn{box-shadow:inset 0 0 0 1px rgb(255 194 122 / .22)}
+}
+
+/* ══════════ Corrections de lecture (audit p0), adaptées ══════════ */
+/* 1. Carte « Ensuite » dans l'ordre de décision : quand → quoi → partir à / alertes → actions → détails */
+.next{display:flex;flex-direction:column}
+.next>*{order:6}
+.next>.when{order:0}
+.next>.row,.next>h3{order:1}
+.next>.meta{order:2}
+.next>.alert{order:3}
+.next>.btns.lg{order:4}
+.next>.why:has(>b){order:2}
+.next>.why:not(:has(>b)){order:5}
+.next>.alert,.next>.meta{margin-top:var(--s-2)}
+.next>.btns.lg{margin-top:var(--s-4)}
+.next>.why:not(:has(>b)){margin-top:var(--s-3)}
+/* Le « plus tard » de la carte (histoire, curiosités) : plus serré, il recule */
+.next>details.story{margin-top:var(--s-2)}
+.next>.en{margin-top:var(--s-2)}
+.next .meta b{color:var(--md-sys-color-primary);font-weight:700}
+/* 3. Textes longs coupés */
+.next>.why:not(:has(>b)){display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.next>.why:has(>b){margin-top:var(--s-2);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+.next>.why:has(>b) b{font-weight:550}
+@media (min-width:360px){ .next>.why:has(>b){-webkit-line-clamp:6} }
+/* Vendredi soir : l'alerte « Demain » prend la place, la note passe à 3 lignes (texte complet dans le programme) pour garder « Y aller » visible. */
+#s-today:has(> .sec > .alert.warn:only-child) .next>.why:has(>b){-webkit-line-clamp:3}
+.next .meta .conf.s{display:none}
+/* Stop : l'heure de départ en tête (gras, couleur de l'heure), le badge passe dessous au besoin, jamais tronquée. */
+.next.hitch .meta.row{flex-wrap:wrap;align-items:flex-start;row-gap:6px}
+.next.hitch .meta.row>.ms{margin-top:2px}
+.next.hitch .meta .grow{flex:1 1 calc(100% - 40px);min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.next.hitch .meta b{white-space:nowrap}
+.next.hitch .meta .conf{margin-left:26px}
+.next.hitch>.why:not(:has(>b)){-webkit-line-clamp:3}
+.next h3{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.en .lead{font-weight:500}
+/* 6. Frise : nom aligné avec l'heure */
+.tl li:not(.sun):not(.ret) .body{display:flex;flex-direction:column}
+.tl .body>.item{order:-1}
+.tl .body>.en{order:3}
+.tl .body>.tlctl{order:4}
+.tl .walk{padding:0 0 2px 44px}
+.tl .time{font:600 .9375rem/1.25rem var(--font-plain);color:var(--ink);width:48px}
+.tl li.done .time,.tl li.skipped .time{color:var(--ink-2);font-weight:500}
+.tl li.skipped .nm{font-style:normal}
+/* Étape passée : estompée par la couleur (AA), pas par l'opacité */
+.tl li.skipped .item,.tl li.skipped .note,.tl li.skipped .walk{opacity:1}
+.tl li.skipped .nm{color:var(--ink-2);font-weight:500}
+.tl li.skipped .item .num{color:var(--ink-2)}
+.tl li.skipped .item .shape{opacity:.45}
+#s-today .tl li:not(.isnext) .note{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.tl li.isnext .item{background-color:color-mix(in srgb,var(--md-sys-color-primary) 9%,transparent)}
+.tl .en{padding-left:0;margin:8px 0 4px}
+.tl .enc{height:auto;min-height:36px;padding-block:6px}
+.tl .enc>span{white-space:normal}
+.tlctl{margin-left:0}
+.tlctl .btn.ghost{background-color:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--md-sys-color-outline-variant);padding:0 16px}
+/* 9. Listes */
+.li{min-height:64px;padding:10px 16px}
+.li .sub{margin-top:2px;gap:2px 10px}
+.li .sub .tag{background:none;padding:0;height:auto;min-height:0;font:500 .875rem/1.25rem var(--font-plain);letter-spacing:0}
+.li .sub .conf.s{display:none}
+.li .sub>span:first-child:not([class]){color:var(--ink);font-weight:500}
+.li .pr{font-weight:600}
+.li .nm,.tl .item .nm{letter-spacing:-.011em}
+/* 10. Titres de section, onglets */
+.sec>h2,.label{font-weight:600;letter-spacing:0}
+/* 11. Liens de source : cible 48 px */
+.ssrc a{display:inline-block;padding:15px 0;margin:-15px 0}
+.srcs a{padding:13px 0;margin:0}
+/* Petits écrans */
+@media (max-width:359px){
+  .flag h1:not(.big){font:600 1.25rem/1.625rem var(--font-brand)}
+  .flag h1::after{margin-top:6px}
+  .flag p{-webkit-line-clamp:1}
+  /* 320 px : la ligne « Jour 4/5 · 0/8 étapes… » répète la barre d'état ; on la retire pour garder « Y aller » visible */
+  .flag:not(:has(h1.big)) p{display:none}
+  .flag ~ .sec:has(> .next:not([style]):first-child){padding-top:12px}
+  .next{padding:var(--s-4)}
+  .next>.why:has(>b){-webkit-line-clamp:2}
+  .next>.btns.lg{margin-top:var(--s-3)}
+  .next h3{font:600 1.3125rem/1.625rem var(--font-brand)}
+  .next.hitch .meta .conf{display:none}
+  .next .when{font-size:1.125rem}
+  /* Stop : le plan B reste lisible, mais sous les boutons */
+  .next.hitch>.alert{order:5;margin-top:var(--s-3)}
+}
+/* Jour de stop : l'heure de départ conseillée EST le « quand » */
+.next.hitch>.meta .grow{color:var(--ink);font-weight:600}
+.next.hitch>.meta>.ms{color:var(--md-sys-color-primary)}
+
+/* Nuit tardive : carte « Rentrer » (style en ligne) au-dessus de « Ensuite ».
+   Pas de chevauchement, un seul anneau néon et un seul halo : rentrer passe d'abord. */
+#s-today:has(> .sec > .next[style]) .flag{padding-bottom:14px}
+#s-today:has(> .sec > .next[style]) .flag ~ .sec:has(> .next:not([style]):first-child){margin-top:0}
+/* Idem quand l'alerte « Demain » reste au-dessus d'« Ensuite » : pas de chevauchement (sinon la carte couvre « Détails »). */
+#s-today:has(> .sec > .alert.warn:only-child) .flag{padding-bottom:14px}
+#s-today:has(> .sec > .alert.warn:only-child) .flag ~ .sec:has(> .next:not([style]):first-child){margin-top:0}
+.next[style]{border-left-color:transparent!important}
+.next[style]>.why{display:block;-webkit-line-clamp:unset;overflow:visible}
+#s-today:has(> .sec > .next[style]) .next:not([style]){background:var(--surface);border-color:var(--md-sys-color-outline-variant);box-shadow:var(--gem-elev-1)}
+#s-today:has(> .sec > .next[style]) .next:not([style]) .btn.primary::before{animation:none;opacity:0}
+
+/* Inter se lit mieux sans l'interlettrage hérité de Google Sans */
+.tl .note,.tl .walk,.li .sub,.kv p,.kv h4,.move p,.fun,details.story>p,details.story>ul.rl,.ck .t,.setrow,.tel,#toast,.wx,.enc,.chip,.seg button,.tag,.conf,.mode,.alert{letter-spacing:0}
+.xs{letter-spacing:.1px}
+
+/* Mouvement réduit : plus de respiration du halo */
+@media (prefers-reduced-motion: reduce){
+  .next .btn.primary::before,#onboard > .btn.primary::before{animation:none!important;opacity:var(--halo-o)}
+}
