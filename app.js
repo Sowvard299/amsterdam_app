@@ -574,7 +574,7 @@ function hitchCard(l, { next = null, step = null, day = null } = {}) {
     <div class="when">${icon("thumb", "i s")}En stop · ${esc(l.from)} → ${esc(l.to)} · ${l.km} km</div>
     <h3>${esc(a.name)}</h3>
     <p class="why">${esc(a.access)}</p>
-    <div class="meta row">${icon("clock", "i s")}<span class="grow">Départ conseillé ${esc(l.startBy)} · ${esc(a.wait)}</span>${confBadge(a.conf)}</div>
+    <div class="meta row">${icon("clock", "i s")}<span class="grow"><b>Départ conseillé ${esc(l.startBy)}</b> · ${esc(a.wait)}</span>${confBadge(a.conf)}</div>
     ${signs(l.sign)}
     ${hitchWx(l)}
     <div class="alert warn">${icon("alert", "i s")}<span>Plan B : ${esc(l.noGo)}</span></div>
