@@ -340,8 +340,8 @@ body.is-offline .offline{display:block}
 .wx > .ms:first-child{font-size:32px;color:var(--md-sys-color-primary)}
 .wx b{font:var(--md-headline-m);font-variation-settings:var(--rond)}
 .wx span .ms{color:var(--ink-2)}
-.wxdays{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s-2)}
-.wxday{text-align:center;padding:var(--s-3) 4px;border-radius:var(--md-shape-li)}
+.wxdays{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.wxday{text-align:center;padding:var(--s-3) 2px;border-radius:var(--md-shape-li)}
 .wxday .d{font:var(--md-title-s)}
 .wxday .ms{display:block;margin:6px auto;font-size:28px;color:var(--md-sys-color-primary)}
 .wxday b{font:var(--md-title-m)}
@@ -369,7 +369,8 @@ body.is-offline .offline{display:block}
 .tl .item .shape{width:32px;height:32px}
 .tl .item .shape .ms{font-size:18px}
 .tl .item .nm{font:var(--md-title-m);letter-spacing:.2px;flex:1;min-width:0;overflow-wrap:anywhere;hyphens:auto}
-@media (max-width:359px){ .tl li{gap:var(--s-2)} .tl .time{width:38px} .tl .item{flex-wrap:wrap} .tl .item>.num{margin-left:44px} }
+@media (max-width:359px){ .tl li{gap:var(--s-2)} .tl .time{width:38px} .tl .item{flex-wrap:wrap} .tl .item .nm{flex-basis:calc(100% - 44px)} .tl .item>.num{margin-left:44px} }
+.tl .item>.num:empty{display:none}
 .tl li.done .nm{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--ink-2)}
 .tl li.skipped .nm{color:var(--ink-2);font-style:italic}
 .tl li.skipped .shape{opacity:.5}
@@ -481,6 +482,7 @@ body.is-offline .offline{display:block}
 #sheet .grab span{width:32px;height:4px;border-radius:2px;background:currentColor;opacity:.4}
 #sheet .head{flex:none;padding:0 var(--gutter) var(--s-4) var(--s-5);display:flex;gap:var(--s-4);align-items:flex-start;touch-action:none}
 #sheet .head h2{font:var(--md-headline-s);font-variation-settings:var(--rond)}
+@media (max-width:359px){ #sheet .head{gap:var(--s-3)} #sheet .head h2{overflow-wrap:anywhere;hyphens:auto} }
 #sheet .head .price{font:var(--md-title-l)!important}
 #sheet .close{position:relative;width:40px;height:40px;border:0;background-color:var(--surface-2);color:var(--ink-2);border-radius:50%;display:grid;place-items:center;flex:none;margin-top:-4px}
 #sheet .content{flex:1;overflow-y:auto;padding:0 var(--s-5) calc(var(--s-6) + var(--safe-b))}
@@ -610,7 +612,7 @@ h1.dayh{font:var(--md-display-s);font-variation-settings:var(--rond);letter-spac
 .kv p + p{margin-top:8px}
 
 /* Culture : curiosités « en chemin » et histoires courtes (17/10/2026) */
-.en{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px}
+.en{display:flex;flex-wrap:wrap;align-items:center;gap:12px 6px;margin:8px 0 2px}
 .en .lead{display:inline-flex;align-items:center;gap:4px;font:var(--md-label-m);letter-spacing:.3px;color:var(--c-curio);margin-right:2px}
 .en .lead .ms{font-variation-settings:"FILL" 1}
 .enc{position:relative;display:inline-flex;align-items:center;height:36px;padding:0 12px;border:1px solid color-mix(in srgb,var(--c-curio) 35%,transparent);
@@ -634,5 +636,8 @@ details.story[open]>summary .chev{transform:rotate(180deg)}
 details.story>p{margin:0;padding:0 14px 12px;font:var(--md-body-m);letter-spacing:.2px;color:var(--ink-2)}
 details.story>p.fun{margin:0 10px 10px;padding:10px 14px;color:var(--ink)}
 details.story>p.ssrc{padding-bottom:14px}
+details.story>ul.rl{margin:0;padding:0 14px 12px 34px;font:var(--md-body-m);letter-spacing:.2px;color:var(--ink-2)}
+details.story>ul.rl li+li{margin-top:6px}
+details.rules>summary>.ms:first-child{color:var(--warn)}
 @media (max-width:359px){ .enc{padding:0 10px} }
 .hwx{display:flex;gap:6px;align-items:flex-start;margin:8px 0 0}.hwx:empty{display:none}.hwx .ms{flex:none;margin-top:2px;color:var(--ink-2)}

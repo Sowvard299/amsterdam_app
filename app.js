@@ -53,7 +53,7 @@ const fmtMin = v => { v = ((Math.round(v) % 1440) + 1440) % 1440; return String(
 
 // ───────────── Données ─────────────
 const BYID = Object.fromEntries(PLACES.map(p => [p.id, p]));
-const BASEP = { ...BASE, cat: "base", why: "Votre auberge, avec le bar Belushi's au rez-de-chaussée." };
+const BASEP = { ...BASE, cat: "base", city: "Amsterdam", why: "Votre auberge, avec le bar Belushi's au rez-de-chaussée." };
 BYID.base = BASEP;
 const CATS = {
   visit: { label: "Visites", one: "Visite", glyph: "cols" },
@@ -61,8 +61,20 @@ const CATS = {
   bar: { label: "Bars", one: "Bar", glyph: "beer" },
   party: { label: "Soirées", one: "Soirée", glyph: "music" },
   curio: { label: "Insolite", one: "À voir en passant", glyph: "spark" },
+  hitch: { label: "Stop", one: "Trajet en stop", glyph: "thumb", hidden: true },
 };
 const DAYBY = Object.fromEntries(DAYS.map(d => [d.id, d]));
+// Où l'on dort chaque soir : Bruxelles lundi, chez des amis à Rotterdam mardi, l'auberge d'Amsterdam ensuite
+for (const d of DAYS) if (d.base) BYID[d.base.id] = { ...d.base, cat: "base" };
+const baseOf = day => (DAYBY[day] && DAYBY[day].base ? BYID[DAYBY[day].base.id] : BASEP);
+const baseName = b => (b.id === "base" ? "l'auberge" : b.name);
+const cityOf = day => (DAYBY[day] && DAYBY[day].city) || "Amsterdam";
+// Le matin, on part du lit de la veille (Bruxelles mardi, Rotterdam mercredi)
+const startOf = day => { const i = DAYS.findIndex(d => d.id === day); return i > 0 ? baseOf(DAYS[i - 1].id) : baseOf(day); };
+const hitchOf = day => plan(day).find(s => s.p && s.p.cat === "hitch");
+// Tant que le stop du jour n'est ni fait, ni passé, ni dépassé, on est encore dans la ville de la veille
+const hitchPending = (day, lmin) => { const h = hitchOf(day); return !!h && !isDone(h.id) && !isSkipped(day, h) && !missed(h, lmin, day); };
+const homeOf = (day, lmin) => (hitchPending(day, lmin) ? startOf(day) : baseOf(day));
 
 // ───────────── État (par téléphone) ─────────────
 const KEY = "ams-v2";
@@ -98,8 +110,11 @@ function applyTheme() {
 // ───────────── Géographie ─────────────
 let me = null; // {lat, lon, acc}
 // En stop ou à Bruxelles, la position ne sert pas aux temps de marche (sinon « 3041 min depuis vous »)
-const meNear = () => (me && dist(me, BASE) < 15000 ? me : null);
-const from = () => meNear() || BASE;
+const homeNow = () => { const c = clock(); return c.phase === "day" ? homeOf(c.day.id, c.lmin) : BASEP; };
+const cityNow = () => homeNow().city || "Amsterdam";
+const meNear = () => (me && dist(me, homeNow()) < 15000 ? me : null);
+const from = () => meNear() || homeNow();
+const isFar = p => !!p && p.lat != null && dist(from(), p) > 15000; // autre ville : on n'affiche pas de temps de marche
 function dist(a, b) {
   const R = 6371000, r = Math.PI / 180;
   const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
@@ -174,11 +189,13 @@ const smallShape = (cat, done) => `<span class="shape${done ? " done" : ""}" dat
 const stepKey = (s, day) => (s.id === "base" ? "base-" + day : s.id);
 const isDone = k => !!state.checked[k];
 const isSkipped = (day, s) => state.skipped[day + ":" + s.id] === true;
-function plan(day) { return (PLAN[day] || []).map(s => ({ ...s, p: BYID[s.id], t: tmin(s.at) })); }
+function plan(day) { return (PLAN[day] || []).map(s => ({ ...s, p: s.id === "base" ? baseOf(day) : BYID[s.id], t: tmin(s.at) })); }
+const stepName = s => (s.id === "base" ? (s.p.id === "base" ? "Auberge : déposer les sacs" : s.p.name) : s.p.name);
 // Une étape dont l'heure est largement dépassée est considérée comme manquée (sauf si on la coche)
 // ou dont le lieu sera fermé à l'arrivée
 function missed(s, lmin, day) {
   if (lmin == null || state.skipped[day + ":" + s.id] === false) return false; // remise à la main
+  if (s.p.cat === "hitch") return lmin > s.t + (s.dur || 60) + 30 || (!!me && dist(me, baseOf(day)) < 15000); // stop : 30 min de grâce, ou le GPS déjà près du lit du soir
   if (lmin > s.t + (s.dur || 60) + 15) return true;
   if (s.p.cat === "base" || lmin < s.t - 60) return false;
   return hoursState(s.p, day, lmin + walkMin(dist(originFor(day, s, lmin).o, s.p))).k === "closed";
@@ -189,9 +206,10 @@ function originFor(day, s, lmin) {
   const steps = plan(day), i = steps.findIndex(x => x.id === s.id);
   for (let j = i - 1; j >= 0; j--) {
     const q = steps[j];
-    if (q.p.lat != null && (isDone(stepKey(q, day)) || (lmin != null && lmin >= q.t))) return { o: q.p, label: q.id === "base" ? "depuis l'auberge" : "depuis " + q.p.name };
+    if (q.p.cat === "hitch") return { o: s.p, label: "à l'arrivée du stop" }; // on arrive d'une autre ville : pas de marche à calculer
+    if (q.p.lat != null && (isDone(stepKey(q, day)) || (lmin != null && lmin >= q.t))) return { o: q.p, label: "depuis " + (q.id === "base" ? baseName(q.p) : q.p.name) };
   }
-  return { o: BASE, label: "depuis l'auberge" };
+  return { o: startOf(day), label: "depuis " + baseName(startOf(day)) };
 }
 function nextStep(day, lmin = null) { return plan(day).find(s => !isDone(stepKey(s, day)) && !isSkipped(day, s) && !missed(s, lmin, day)); }
 // Prix d'offre réservé à un jour (ex. jeudi étudiant) : inconnu les autres jours
@@ -201,6 +219,7 @@ function dayProgress(day) {
   const done = st.filter(s => isDone(s.id)).length;
   const kinds = { voir: false, manger: false, sortir: false };
   for (const s of st) if (isDone(s.id)) {
+    if (s.p.cat === "hitch") continue;
     if (s.p.cat === "visit") kinds.voir = true;
     else if (s.p.cat === "food") kinds.manger = true;
     else kinds.sortir = true;
@@ -215,7 +234,8 @@ function xxx(kinds) {
 }
 
 // ───────────── Météo (Open-Meteo, CC BY 4.0) ─────────────
-const WX_URL = "https://api.open-meteo.com/v1/forecast?latitude=52.374&longitude=4.8964"
+const WX_CITIES = [["Amsterdam", 52.374, 4.8964], ["Bruxelles", 50.8467, 4.3525], ["Rotterdam", 51.9225, 4.4792]];
+const WX_URL = `https://api.open-meteo.com/v1/forecast?latitude=${WX_CITIES.map(x => x[1]).join(",")}&longitude=${WX_CITIES.map(x => x[2]).join(",")}`
   + "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day"
   + "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code"
   + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum"
@@ -239,26 +259,31 @@ async function fetchTimeout(url, ms = 6000) {
   try { return await fetch(url, { signal: ctrl.signal }); } finally { clearTimeout(t); }
 }
 async function loadWeather(force = false) {
-  if (!force && state.wx && Date.now() - state.wx.ts < 60 * 60e3) return;
+  if (!force && state.wx && state.wx.by && Date.now() - state.wx.ts < 60 * 60e3) return;
   if (!navigator.onLine) return;
   try {
     const r = await fetchTimeout(WX_URL);
     if (!r.ok) return;
     const d = await r.json();
-    state.wx = { ts: Date.now(), d: { current: d.current, hourly: d.hourly, daily: d.daily } };
+    const by = {};
+    (Array.isArray(d) ? d : [d]).forEach((x, i) => { if (WX_CITIES[i] && x && x.daily) by[WX_CITIES[i][0]] = { current: x.current, hourly: x.hourly, daily: x.daily }; });
+    if (!by.Amsterdam) return;
+    state.wx = { ts: Date.now(), by };
     save();
     renderActive();
   } catch (e) { /* réseau absent : on garde l'ancienne valeur */ }
 }
-function wxDay(dateStr) {
-  const d = state.wx && state.wx.d.daily;
+// Prévision d'une ville ; ancien cache (Amsterdam seul) en secours
+const wxOf = (city = cityNow()) => (state.wx ? (state.wx.by ? state.wx.by[city] || state.wx.by.Amsterdam : state.wx.d) : null);
+function wxDay(dateStr, city) {
+  const w = wxOf(city), d = w && w.daily;
   if (!d) return null;
   const i = d.time.findIndex(t => new Date(t * 1000).toISOString().slice(0, 10) === dateStr);
   if (i < 0 || d.temperature_2m_max[i] == null) return null;
   return { code: d.weather_code[i], max: d.temperature_2m_max[i], min: d.temperature_2m_min[i], pp: d.precipitation_probability_max[i], mm: d.precipitation_sum[i] };
 }
-function wxHours(fromMs, hours) {
-  const h = state.wx && state.wx.d.hourly;
+function wxHours(fromMs, hours, city) {
+  const w = wxOf(city), h = w && w.hourly;
   if (!h) return [];
   const out = [];
   for (let i = 0; i < h.time.length; i++) {
@@ -395,6 +420,15 @@ function storyBody(st) {
     <p class="xs muted ssrc">${st.conf === "probable" ? "Sources concordantes mais non officielles · " : ""}${src}</p>`;
 }
 const storyHTML = st => (st ? `<div class="kv story-kv"><h4>L'histoire</h4>${storyBody(st)}</div>` : "");
+// Règles d'une activité sensible (truffes du jeudi) : liste, activités, sources officielles
+const RULES = typeof TRIP_RULES !== "undefined" ? TRIP_RULES : {};
+function rulesBody(r) {
+  return `<p>${esc(r.lead)}</p><ul class="rl">${r.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${(r.activities || []).length ? `<p><b>L'après-midi</b></p><ul class="rl">${r.activities.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <p class="xs muted ssrc">${(r.src || []).map(s => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ")}</p>`;
+}
+const rulesCard = k => `<details class="story rules" style="margin-top:0"><summary>${icon("shield", "i s")}<span class="grow">${esc(RULES[k].title)}</span>${icon("down", "i s chev")}</summary>${rulesBody(RULES[k])}</details>`;
+const CITY3 = { Bruxelles: "Bxl", Rotterdam: "Rdam", Amsterdam: "Ams" };
 function enChips(s, { lead = "En chemin" } = {}) {
   const list = (s.en || []).map(e => BYID[e]).filter(Boolean);
   if (!list.length) return "";
@@ -403,18 +437,19 @@ function enChips(s, { lead = "En chemin" } = {}) {
 function placeSheet(id) {
   const p = BYID[id];
   if (!p) return;
+  if (p.cat === "hitch") return openHitch(p.hitch);
   const c = clock();
   const dayId = c.phase === "day" ? c.day.id : null;
-  const w = walkFrom(p);
+  const far = isFar(p), w = far ? null : walkFrom(p);
   const done = isDone(id);
-  const catLabel = p.cat === "base" ? "Auberge" : CATS[p.cat].one;
+  const catLabel = p.cat === "base" ? (p.id === "base" ? "Auberge" : "Nuit à " + p.city) : CATS[p.cat].one;
   const head = `${smallShape(p.cat === "base" ? "base" : p.cat, done)}<div style="flex:1;min-width:0">
       <h2 id="sheetTitle">${esc(p.name)}</h2>
-      <div class="small muted" style="margin-top:2px">${catLabel}${p.venue ? " · " + esc(p.venue) : ""}${w ? ` · ${w} min à pied` : ""}</div></div>
+      <div class="small muted" style="margin-top:2px">${catLabel}${p.venue ? " · " + esc(p.venue) : ""}${w ? ` · ${w} min à pied` : far && p.city ? " · " + esc(p.city) : ""}</div></div>
       ${p.price != null ? `<div class="price" style="font-weight:700;font-size:var(--fs-lg)">${euro(p.price)}</div>` : ""}`;
   const planned = [];
   for (const d of DAYS) for (const s of PLAN[d.id] || []) {
-    if (s.id === id) planned.push(`${d.label} · ${s.at}${s.note ? " — " + esc(s.note) : ""}`);
+    if ((s.id === "base" ? baseOf(d.id).id : s.id) === id) planned.push(`${d.label} · ${s.at}${s.note ? " — " + esc(s.note) : ""}`);
     if ((s.en || []).includes(id)) planned.push(`${d.label} · en chemin vers ${esc(BYID[s.id].name)} (${s.at})`);
   }
   let hours = "";
@@ -441,10 +476,11 @@ function placeSheet(id) {
     </div>
     ${p.url ? `<div class="btns"><a class="btn" href="${esc(p.url)}" target="_blank" rel="noopener">${icon("ticket")} Billets et programme</a></div>` : ""}
     ${p.book && p.book.url ? `<div class="btns"><a class="btn" href="${esc(p.book.url)}" target="_blank" rel="noopener">${icon("ticket")} Réserver</a></div>` : ""}
-    <p class="small muted" style="margin:10px 0 0">${icon("walk", "i s")} ${dist0 != null ? `${walkMin(dist0)} min · ${kmTxt(dist0)} ${meNear() ? "depuis vous" : "depuis l'auberge"}` : "adresse sur le billet"} · ${esc(p.addr || "")}</p>
+    <p class="small muted" style="margin:10px 0 0">${far ? `${icon("loc", "i s")} ${esc(p.city || "")}` : `${icon("walk", "i s")} ${dist0 != null ? `${walkMin(dist0)} min · ${kmTxt(dist0)} ${meNear() ? "depuis vous" : "depuis " + baseName(homeNow())}` : "adresse sur le billet"}`} · ${esc(p.addr || "")}</p>
     ${st ? `<p style="margin:8px 0 0">${stateTag(st)}</p>` : ""}
     ${p.why ? `<div class="kv"><h4>Pourquoi</h4><p>${esc(p.why)}</p></div>` : ""}
     ${storyHTML(p.story)}
+    ${p.rules && RULES[p.rules] ? `<div class="kv"><h4>${esc(RULES[p.rules].title)}</h4>${rulesBody(RULES[p.rules])}</div>` : ""}
     ${p.priceTxt ? `<div class="kv"><h4>Prix</h4><p>${esc(p.priceTxt)}</p></div>` : ""}
     ${know.length ? `<div class="kv"><h4>Bon à savoir</h4><p>${know.join("<br>")}</p></div>` : ""}
     ${hours ? `<div class="kv"><h4>Horaires</h4>${hours}</div>` : ""}
@@ -465,11 +501,12 @@ function placeSheet(id) {
 
 // ───────────── Composants de liste ─────────────
 function placeRow(p, { dayId = null, lmin = 0, showDay = false } = {}) {
-  const w = walkFrom(p);
+  const far = isFar(p), w = walkFrom(p);
   const st = dayId ? hoursState(p, dayId, lmin) : null;
   const done = isDone(p.id);
   const subs = [];
-  if (w) subs.push(`<span>${w} min</span>`);
+  if (far) subs.push(`<span>${esc(p.city || "")}</span>`);
+  else if (w) subs.push(`<span>${w} min</span>`);
   if (p.cat === "party") subs.push(`<span>${DAYBY[p.date] && (showDay || p.date !== dayId) ? DAYBY[p.date].label + " · " : ""}${esc(p.start)}</span>`);
   if (st && p.cat !== "party") subs.push(stateTag(st));
   if (p.cat === "party") subs.push(`<span>${esc(p.venue)}</span>`);
@@ -485,7 +522,7 @@ function placeRow(p, { dayId = null, lmin = 0, showDay = false } = {}) {
 }
 
 // ───────────── Transports du jour ─────────────
-const MODE = { walk: ["walk", "À pied"], tram: ["tram", "Tram"], ferry: ["ferry", "Ferry"], bus: ["bus", "Bus de nuit"], bike: ["bike", "Vélo"] };
+const MODE = { walk: ["walk", "À pied"], tram: ["tram", "Tram"], ferry: ["ferry", "Ferry"], bus: ["bus", "Bus de nuit"], bike: ["bike", "Vélo"], stop: ["thumb", "En stop"], metro: ["subway", "Métro"] };
 const modeChips = m => m.modes.map(k => `<span class="mode">${icon(MODE[k][0], "i s")}${MODE[k][1]}</span>`).join("");
 function moveCard(d, { home = true } = {}) {
   const m = d.move;
@@ -497,20 +534,21 @@ function timeline(day, { lmin = null, controls = false } = {}) {
   const steps = plan(day);
   const sun = tmin(SUN[day][1]);
   const nx = nextStep(day, lmin);
-  let html = `<ol class="tl">`, sunDone = false, prev = BASE;
+  const start = startOf(day);
+  let html = `<ol class="tl">`, sunDone = false, prev = start;
   for (const s of steps) {
     if (!sunDone && s.t > sun) {
       html += `<li class="sun"><span class="time num">${SUN[day][1]}</span><span class="rail"><span class="dot"></span></span><div class="body">${icon("sunset", "i s")} coucher du soleil</div></li>`;
       sunDone = true;
     }
     const k = stepKey(s, day), done = isDone(k), skipped = isSkipped(day, s) || (!done && missed(s, lmin, day));
-    const w = prev && s.p.lat != null ? walkMin(dist(prev, s.p)) : null;
+    const w = prev && s.p.lat != null && prev.cat !== "hitch" && s.p.cat !== "hitch" ? walkMin(dist(prev, s.p)) : null;
     const cls = [done ? "done" : "", skipped ? "skipped" : "", nx && nx.id === s.id && lmin != null ? "isnext" : ""].join(" ");
     html += `<li class="${cls}"><span class="time num">${s.at}</span><span class="rail"><span class="dot"></span></span><div class="body">
-      ${s.via ? `<div class="walk">${icon(s.vm || "ferry", "i s")} ${esc(s.via)}</div>` : w && prev !== BASE ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied${s.alt ? ` · ${esc(s.alt)}` : ""}</div>` : ""}
+      ${s.via ? `<div class="walk">${icon(s.vm || "ferry", "i s")} ${esc(s.via)}</div>` : w && w <= 90 && prev !== start ? `<div class="walk">${icon("walk", "i s")} ${w} min à pied${s.alt ? ` · ${esc(s.alt)}` : ""}</div>` : ""}
       ${enChips(s)}
-      <button type="button" class="item" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat, done)}
-        <span class="nm">${esc(s.id === "base" ? "Auberge : déposer les sacs" : s.p.name)}</span>
+      <button type="button" class="item" data-act="open" data-id="${s.p.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat, done)}
+        <span class="nm">${esc(stepName(s))}</span>
         <span class="num small" style="font-weight:700">${s.p.price != null ? euro(s.p.price) : ""}</span></button>
       ${s.note ? `<div class="note">${esc(s.note)}</div>` : ""}
       ${controls ? `<div class="tlctl"><button type="button" class="btn sm ghost" data-act="stepDone" data-day="${day}" data-id="${s.id}">${done ? "Annuler" : "Fait"}</button>
@@ -530,7 +568,7 @@ const HLEG = Object.fromEntries(HLEGS.map(l => [l.id, l]));
 const gmDir = (s, mode = "transit") => `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=${mode}`;
 const signs = list => `<div class="signs">${list.map(t => `<span class="signc">${esc(t)}</span>`).join("")}</div>`;
 const hitchRow = l => `<button type="button" class="li" data-act="hitch" data-id="${l.id}">${icon("thumb")}<span style="flex:1;min-width:0"><span class="nm">${esc(l.label)} · ${esc(l.from)} → ${esc(l.to)}</span><span class="sub">${l.km} km · ${esc(l.duration)}</span></span>${icon("chev", "i s")}</button>`;
-function hitchCard(l, { next = null } = {}) {
+function hitchCard(l, { next = null, step = null, day = null } = {}) {
   const a = l.spots[0];
   return `<div class="card pad next hitch">
     <div class="when">${icon("thumb", "i s")}En stop · ${esc(l.from)} → ${esc(l.to)} · ${l.km} km</div>
@@ -543,6 +581,8 @@ function hitchCard(l, { next = null } = {}) {
     <div class="btns lg"><a class="btn primary" href="${gmDir(a)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="hitch" data-id="${l.id}">${icon("info")} Détails</button>
       <button type="button" class="btn icon" data-act="sharePos" data-id="${l.id}" aria-label="Envoyer notre position">${icon("loc")}</button></div>
+    ${step ? `${step.note ? `<p class="why"><b>${esc(step.note)}</b></p>` : ""}<div class="btns"><button type="button" class="btn" data-act="stepDone" data-day="${day}" data-id="${step.id}">${icon("check")} Arrivés à ${esc(l.to)}</button>
+      <button type="button" class="btn icon" data-act="stepSkip" data-day="${day}" data-id="${step.id}" aria-label="Passer">${icon("skip")}</button></div>` : ""}
     ${next ? `<p class="small" style="margin:12px 0 0"><button type="button" class="btn sm ghost" data-act="hitch" data-id="${next.id}">Ensuite : ${esc(next.from)} → ${esc(next.to)}</button></p>` : ""}
   </div>`;
 }
@@ -550,16 +590,6 @@ function hitchSection(title, legs) {
   if (!HLEGS.length) return "";
   return `<div class="sec"><h2>${esc(title)} <span class="grow"></span><button type="button" class="btn sm ghost" data-act="hitchRules">${icon("law", "i s")} Règles</button></h2>
     <div class="list">${legs.map(hitchRow).join("")}</div></div>`;
-}
-// Mardi 27 : carte du trajet tant que les sacs ne sont pas posés à l'auberge (GPS si disponible, sinon l'heure)
-function hitchTuesday(c) {
-  if (!HLEGS.length || c.day.id !== "mar" || c.lmin >= 20 * 60) return "";
-  const b = plan("mar").find(st => st.id === "base");
-  if (b && isDone(stepKey(b, "mar"))) return "";
-  if (me && dist(me, BASE) < 3000) return "";
-  const first = me ? me.lat < 51.75 : c.lmin < 12 * 60 + 30;
-  const l = first ? HLEG.h2 : HLEG.h3;
-  return `<div class="sec">${hitchCard(l, { next: first ? HLEG.h3 : null })}</div>`;
 }
 // Météo du jour du trajet : prévision Open-Meteo (CC BY 4.0) au départ et à l'arrivée, gardée hors ligne
 const HWX_AT = { Paris: [48.86, 2.35], Bruxelles: [50.85, 4.35], Rotterdam: [51.92, 4.48], Amsterdam: [52.37, 4.9] };
@@ -612,7 +642,7 @@ function openHitch(id) {
     <div class="kv"><h4>Itinéraire</h4><p>${esc(l.route)}</p></div>
     <div class="kv"><h4>À l'arrivée</h4><p>${esc(l.arrival)}</p></div>
     ${l.stop ? `<div class="kv"><h4>Pause à Rotterdam</h4><p>${esc(l.stop)}</p></div>` : ""}
-    <div class="kv"><h4>Plan B</h4>${l.planB.map(b => `<p><b>${esc(b.mode)}</b> · ${esc(b.txt)} <a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, ""))}</a> <span class="muted">· ${esc(b.price)}</span></p>`).join("")}<p class="xs muted">Bus : prix FlixBus pour 2 adultes relevés le 17/10/2026, ils montent souvent le jour même.</p></div>
+    <div class="kv"><h4>Plan B</h4>${l.planB.map(b => `<p><b>${esc(b.mode)}</b> · ${esc(b.txt)} <a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, ""))}</a> <span class="muted">· ${esc(b.price)}</span></p>`).join("")}<p class="xs muted">Bus : prix FlixBus pour 2 adultes relevés entre le 17 et le 20/10/2026, ils montent souvent le jour même.</p></div>
     ${l.sleep ? `<div class="kv"><h4>Dormir à Bruxelles (lundi 26)</h4>${l.sleep.map(b => `<p><b>${esc(b.name)}</b> · ${esc(b.addr)}<br><span class="small">${esc(b.price)}</span> · <a href="${gmDir(b)}" target="_blank" rel="noopener">itinéraire</a></p>`).join("")}<p class="xs muted">Prix Hostelworld pour la nuit du 26 au 27/10, relevés le 16/10/2026.</p></div>` : ""}
     <div class="kv"><h4>Sources</h4><div class="srcs">${srcs.map(x => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div><p class="xs muted">${esc(HITCH.attribution)}</p></div>
     <div class="btns"><button type="button" class="btn" data-act="hitchRules">${icon("law")} Règles et sécurité</button></div>`;
@@ -636,8 +666,8 @@ function openHitchRules() {
 
 // ───────────── Écran Aujourd'hui ─────────────
 function statusLine(c) {
-  const wx = state.wx && state.wx.d.current;
-  const left = c.phase === "day" ? `${esc(c.day.long.split(" ")[0])} ${c.day.label.split(" ")[1]} oct. · Jour ${c.idx + 1}/4`
+  const wx = wxOf() && wxOf().current;
+  const left = c.phase === "day" ? `${esc(c.day.long.split(" ")[0])} ${c.day.label.split(" ")[1]} oct. · Jour ${c.idx + 1}/${DAYS.length}`
     : new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(now());
   const w = wx && c.phase !== "before" ? `<span class="wxchip">${icon(wmo(wx.weather_code)[0], "i s")}${Math.round(wx.temperature_2m)}°</span>` : "";
   return `<div class="status"><span class="grow">${left}</span>${w}</div>`;
@@ -675,12 +705,12 @@ function todayBefore(c) {
   ];
   const nPrep = prep.filter(x => x.ok).length;
   const tiles = DAYS.map(d => {
-    const w = wxDay(d.date);
+    const w = wxDay(d.date, d.city);
     const [ic, lab] = w ? wmo(w.code) : ["cloud", ""];
-    return `<div class="card wxday"><div class="d">${d.label}</div>${w ? icon(ic) + `<div class="num"><b>${Math.round(w.max)}°</b> <span class="muted">${Math.round(w.min)}°</span></div><div class="xs muted">${w.pp != null ? w.pp + " % pluie" : esc(lab)}</div>` : `<div class="xs muted" style="padding:14px 0">pas encore</div>`}</div>`;
+    return `<div class="card wxday"><div class="d">${d.label}</div><div class="xs muted">${esc(CITY3[d.city] || d.city)}</div>${w ? icon(ic) + `<div class="num"><b>${Math.round(w.max)}°</b> <span class="muted">${Math.round(w.min)}°</span></div><div class="xs muted">${w.pp != null ? w.pp + " % pluie" : esc(lab)}</div>` : `<div class="xs muted" style="padding:14px 0">pas encore</div>`}</div>`;
   }).join("");
   return `${statusLine(c)}
-  <div class="flag"><div class="t"><h1 class="big num">J-${n}</h1><p>Mar 27 → Ven 30 oct. · départ sam. 31 tôt</p></div>${xxx(null)}</div>
+  <div class="flag"><div class="t"><h1 class="big num">J-${n}</h1><p>Lun 26 → Ven 30 oct. · Bruxelles, Rotterdam, Amsterdam</p></div>${xxx(null)}</div>
   ${HLEG.h1 && c.a.date === HLEG.h1.date ? `<div class="sec">${hitchCard(HLEG.h1)}</div>` : ""}
   ${hitchSection("En stop jusqu'à Amsterdam, et retour", HLEGS)}
   <div class="sec"><h2>À faire maintenant</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
@@ -692,7 +722,7 @@ function todayBefore(c) {
   <div class="sec"><h2>Préparer le téléphone <span class="grow"></span>${nPrep}/4</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
     ${prep.map(x => `<div class="ck${x.ok ? " done" : ""}">${x.ok ? icon("check") : icon("chev")}<span class="t">${x.url ? `<a href="${x.url}" target="_blank" rel="noopener" data-act="guideRead">${esc(x.txt)}</a>` : `<button type="button" class="btn sm ghost" data-act="${x.act}" ${x.s ? `data-s="${x.s}"` : ""}>${esc(x.txt)}</button>`}</span></div>`).join("")}
   </div></div>
-  <div class="sec"><h2>Vos 4 jours</h2><div class="list">
+  <div class="sec"><h2>Vos ${DAYS.length} jours</h2><div class="list">
     ${DAYS.map(d => { const pr = dayProgress(d.id); return `<button type="button" class="li" data-act="day" data-day="${d.id}">${icon("cal")}<span style="flex:1"><span class="nm">${d.label} · ${esc(d.theme)}</span><span class="sub">${esc(d.sector || d.sub)}</span>${d.move ? `<span class="modes">${modeChips(d.move)}</span>` : ""}</span><span class="pr num">${pr.done}/${pr.total}</span></button>`; }).join("")}
   </div></div>
   <div class="sec"><a class="btn" style="width:100%" href="${TRIP.guide}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique (papiers, transports, règles, valise)</a></div>
@@ -703,7 +733,8 @@ function nextCard(c, s) {
   if (!s) {
     return `<div class="card pad next"><div class="when">Programme terminé</div><h3>Bien joué</h3><p class="why">Tout le plan du jour est fait ou passé. Regardez « Ce soir » ou rentrez.</p></div>`;
   }
-  const p = s.p, org = originFor(day, s, c.lmin), w = p.lat != null ? walkMin(dist(org.o, p)) : 0;
+  if (s.p.cat === "hitch" && HLEG[s.p.hitch]) return hitchCard(HLEG[s.p.hitch], { step: s, day });
+  const p = s.p, org = originFor(day, s, c.lmin), fromHitch = org.o === p, w = p.lat != null && !fromHitch ? walkMin(dist(org.o, p)) : 0;
   const leave = s.t - w - 3;
   const arrive = Math.max(c.lmin + w, s.t);
   const stArr = p.cat !== "base" ? hoursState(p, day, arrive) : null;
@@ -718,13 +749,13 @@ function nextCard(c, s) {
     : `<div class="alert warn">En retard de ${durTxt(late)} · passer à la suite ?</div>`);
   return `<div class="card pad next">
     <div class="when">${icon(here ? "loc" : "clock", "i s")}${here ? "Vous y êtes" : "Ensuite · " + s.at}</div>
-    <div class="row" style="margin-top:6px">${smallShape(p.cat === "base" ? "base" : p.cat, false)}<h3 class="grow" style="margin:0">${esc(s.id === "base" ? "Auberge : déposer les sacs" : p.name)}</h3>
+    <div class="row" style="margin-top:6px">${smallShape(p.cat === "base" ? "base" : p.cat, false)}<h3 class="grow" style="margin:0">${esc(stepName(s))}</h3>
       ${p.price != null ? `<span class="price num">${euro(p.price)}</span>` : ""}</div>
     ${p.why ? `<p class="why">${esc(p.why)}</p>` : ""}
     ${s.note ? `<p class="why"><b>${esc(s.note)}</b></p>` : ""}
     ${p.story ? `<details class="story"><summary>${icon("story", "i s")}<span class="grow">L'histoire en 30 secondes</span>${icon("down", "i s chev")}</summary>${storyBody(p.story)}</details>` : ""}
     ${enChips(s, { lead: "Sur le chemin" })}
-    <div class="meta row">${icon(s.via ? s.vm || "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : `${w} min ${esc(org.label)}`}${!here && !s.via && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
+    <div class="meta row">${icon(s.via ? s.vm || "ferry" : "walk", "i s")}<span class="grow">${s.via ? esc(s.via) : fromHitch ? "Depuis l'arrivée du stop" : `${w} min ${esc(org.label)}`}${!here && !s.via && !fromHitch && leave > c.lmin ? ` · partez à <b class="num">${fmtMin(leave)}</b>` : ""}</span>${confBadge(p.conf)}</div>
     ${alerts.join("")}
     <div class="btns lg"><a class="btn primary" href="${navUrl(p)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="stepDone" data-day="${day}" data-id="${s.id}">${icon("check")} Fait</button>
@@ -734,15 +765,15 @@ function nextCard(c, s) {
 function weatherStrip(c) {
   const sun = SUN[c.day.id][1];
   if (!state.wx) return `<div class="card wx">${icon("sunset", "i s")} Coucher du soleil ${sun}<span class="muted small">${navigator.onLine ? "Météo indisponible pour l'instant" : "Météo indisponible hors ligne"}</span></div>`;
-  const cur = state.wx.d.current;
-  const hrs = wxHours(now().getTime(), 8);
+  const city = cityNow(), cur = wxOf(city) && wxOf(city).current;
+  const hrs = wxHours(now().getTime(), 8, city);
   let maxp = null;
   for (const h of hrs) if (h.pp != null && (!maxp || h.pp > maxp.pp)) maxp = h;
   const [ic, lab] = wmo(cur ? cur.weather_code : null);
   return `<button type="button" class="card wx" data-act="hourly" style="width:100%;text-align:left;border:1px solid var(--line)">
     ${icon(ic)}<b class="num">${cur ? Math.round(cur.temperature_2m) + "°" : "—"}</b><span>${esc(lab)}</span>
     ${maxp ? `<span>${icon("rain", "i s")} ${maxp.pp} % vers ${hhmm(new Date(maxp.t)).slice(0, 2)} h</span>` : ""}
-    <span>${icon("sunset", "i s")} ${sun}</span><span class="xs muted">${wxAge()}</span></button>
+    <span>${icon("sunset", "i s")} ${sun}</span><span class="xs muted">${city === "Amsterdam" ? "" : esc(city) + " · "}${wxAge()}</span></button>
     <div id="hourly" hidden></div>`;
 }
 function hourlyHTML() {
@@ -758,25 +789,27 @@ function todayDay(c) {
   const s = nextStep(day, c.lmin);
   const tonight = PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).map(p => ({ p, st: hoursState(p, day, c.lmin) }))
     .filter(x => x.st.k !== "closed").sort((a, b) => (tmin(a.p.start) || 0) - (tmin(b.p.start) || 0) || (a.p.price ?? 99) - (b.p.price ?? 99));
-  const tonightHTML = `<div class="sec"><h2>Ce soir (${tonight.length}) <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
+  const inAms = cityNow() === "Amsterdam";
+  const tonightHTML = cityOf(day) !== "Amsterdam" ? "" : `<div class="sec"><h2>Ce soir (${tonight.length}) <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
     ${tonight.length ? `<div class="carousel">${tonight.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>
     <p class="xs muted" style="margin:6px 0 0">Programmes vérifiés le ${dmy(TRIP.dataVersion).slice(0, 5)} : revérifiez la veille sur la page de la soirée.</p>` : `<p class="empty">Pas de soirée datée ce soir.</p>`}</div>`;
   const openNow = PLACES.filter(p => (p.cat === "bar" || p.cat === "food") && p.lat != null)
     .map(p => ({ p, st: hoursState(p, day, c.lmin), w: walkFrom(p) }))
     .filter(x => x.st.k === "open" && x.w <= 15).sort((a, b) => (priceOn(a.p, day) ?? 99) - (priceOn(b.p, day) ?? 99)).slice(0, 6);
   const others = PLACES.filter(p => p.cat !== "party" && p.cat !== "curio" && (p.days || []).includes(day) && !(PLAN[day] || []).some(st => st.id === p.id));
-  const home = BASE, wHome = walkMin(dist(from(), home));
+  const home = baseOf(day), wHome = walkMin(dist(from(), home)), hName = home.id === "base" ? "Auberge" : home.name;
   const late = c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
   const homeCard = late ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer</div>
-      <h3>${meNear() ? `Auberge · ${wHome} min à pied` : "Auberge · Warmoesstraat 129"}</h3><p class="why">${meNear() ? "" : me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}${c.day.move ? esc(c.day.move.home.t) : "Ferry F3 toute la nuit depuis Noord."}</p>
-      <div class="btns"><a class="btn primary" href="${navUrl({ ...home, name: "Warmoesstraat 129" })}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
-      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} Bus de nuit</a></div></div></div>` : "";
+      <h3>${meNear() ? `${esc(hName)} · ${wHome} min à pied` : esc(home.id === "base" ? "Auberge · Warmoesstraat 129" : hName)}</h3><p class="why">${meNear() ? "" : me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}${c.day.move ? esc(c.day.move.home.t) : "Ferry F3 toute la nuit depuis Noord."}</p>
+      <div class="btns"><a class="btn primary" href="${navUrl(home)}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
+      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} ${home.id === "base" ? "Bus de nuit" : "Transports"}</a></div></div></div>` : "";
+  const rules = [...new Set(plan(day).map(st => st.p && st.p.rules).filter(k => k && RULES[k]))];
   return `${statusLine(c)}
-  <div class="flag"><div class="t"><h1>${esc(c.day.theme)}</h1><p>Jour ${c.idx + 1}/4 · ${pr.done}/${pr.total} étapes · ${esc(c.day.sub)}</p></div>${xxx(pr.kinds)}</div>
+  <div class="flag"><div class="t"><h1>${esc(c.day.theme)}</h1><p>Jour ${c.idx + 1}/${DAYS.length} · ${pr.done}/${pr.total} étapes · ${esc(c.day.sub)}</p></div>${xxx(pr.kinds)}</div>
   ${homeCard}
-  ${hitchTuesday(c)}
   ${day === "ven" && c.lmin >= 18 * 60 && HLEG.h4 && HLEG.h4.eve ? `<div class="sec"><div class="alert warn" style="margin-top:0">${icon("thumb", "i s")}<span>Demain, ${esc(HLEG.h4.eve.replace(/^./, m => m.toLowerCase()))} <button type="button" class="btn sm ghost" data-act="hitch" data-id="h4">Détails</button></span></div></div>` : ""}
   <div class="sec">${nextCard(c, s)}</div>
+  ${rules.map(k => `<div class="sec">${rulesCard(k)}</div>`).join("")}
   <div class="sec">${weatherStrip(c)}</div>
   <div class="sec"><h2>Se déplacer aujourd'hui</h2>${moveCard(c.day)}</div>
   ${c.lmin >= 22 * 60 ? tonightHTML : ""}
@@ -785,9 +818,9 @@ function todayDay(c) {
   <div class="sec"><h2>Ouvert maintenant, à moins de 15 min</h2>
     ${openNow.length ? `<div class="list">${openNow.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>`
       : `<p class="empty">Aucun bar ni resto aux horaires connus n'est ouvert à moins de 15 min.</p>`}</div>
-  <div class="sec"><h2>Près de vous</h2>${essGrid()}</div>
-  <div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})${icon("chev", "i s chev")}</summary>
-    <div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: c.lmin })).join("")}</div></details></div>
+  ${inAms ? `<div class="sec"><h2>Près de vous</h2>${essGrid()}</div>` : ""}
+  ${others.length ? `<div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})${icon("chev", "i s chev")}</summary>
+    <div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: c.lmin })).join("")}</div></details></div>` : ""}
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
 function todayLeave(c) {
@@ -807,7 +840,7 @@ function todayLeave(c) {
     <div class="btns"><a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=52.3791,4.9003&travelmode=walking" target="_blank" rel="noopener">${icon("walk")} Vers Centraal</a></div></div></details></div>`;
 }
 function todayAfter(c) {
-  const all = PLACES.filter(p => p.cat !== "party");
+  const all = PLACES.filter(p => p.cat !== "party" && p.cat !== "hitch");
   const n = all.filter(p => isDone(p.id)).length;
   const per = DAYS.map(d => dayProgress(d.id));
   return `${statusLine(c)}
@@ -819,7 +852,7 @@ function todayAfter(c) {
 // ───────────── Écran Programme ─────────────
 function renderPlan() {
   const c = clock();
-  const day = state.progDay || (c.phase === "day" ? c.day.id : "mar");
+  const day = state.progDay || (c.phase === "day" ? c.day.id : DAYS[0].id);
   const d = DAYBY[day];
   const others = PLACES.filter(p => (p.days || []).includes(day) && p.cat !== "party" && p.cat !== "curio" && !(PLAN[day] || []).some(s => s.id === p.id));
   const pr = dayProgress(day);
@@ -830,10 +863,10 @@ function renderPlan() {
   <div class="sec"><div class="card pad">${timeline(day, { controls: true, lmin: c.phase === "day" && c.day.id === day ? c.lmin : null })}</div>
     <div class="btns"><button type="button" class="btn" data-act="mapDay" data-day="${day}">${icon("map")} Voir le parcours</button>
     <button type="button" class="btn" data-act="sharePlan" data-day="${day}">${icon("share")} Partager</button></div></div>
-  <div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
-    <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>
-  <div class="sec"><h2>Aussi dans le coin (${others.length})</h2><div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: 18 * 60 })).join("")}</div>
-    <p class="xs muted" style="margin:6px 0 0">Les horaires affichés dans cette liste sont ceux de 18:00 ce jour-là.</p></div>
+  ${d.city === "Amsterdam" ? `<div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
+    <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>` : ""}
+  ${others.length ? `<div class="sec"><h2>Aussi dans le coin (${others.length})</h2><div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: 18 * 60 })).join("")}</div>
+    <p class="xs muted" style="margin:6px 0 0">Les horaires affichés dans cette liste sont ceux de 18:00 ce jour-là.</p></div>` : ""}
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
 
@@ -843,7 +876,8 @@ function renderPlaces() {
   const c = clock();
   const cat = state.listCat;
   const dayId = c.phase === "day" ? c.day.id : null;
-  const pday = cat === "party" ? (state.listDay || dayId || "mar") : null;
+  const amsDays = DAYS.filter(d => d.city === "Amsterdam");
+  const pday = cat === "party" ? (state.listDay || (dayId && cityOf(dayId) === "Amsterdam" ? dayId : amsDays[0].id)) : null;
   let items = PLACES.filter(p => p.cat === cat);
   if (cat === "party") items = items.filter(p => pday === "all" ? true : p.date === pday || p.date === "all");
   const lf = state.lf;
@@ -863,8 +897,8 @@ function renderPlaces() {
     curio: "Gratuit, sur vos trajets : 1 à 5 min chacun, rien à réserver. Chaque fiche raconte l'histoire du lieu.",
   };
   $("#s-places").innerHTML = `<div class="status"><span class="grow">Lieux</span></div>
-  <div class="sec" style="padding-top:0"><div class="seg" role="group" aria-label="Catégorie">${Object.entries(CATS).map(([k, v]) => `<button type="button" data-act="cat" data-cat="${k}" aria-pressed="${k === cat}">${v.label}</button>`).join("")}</div></div>
-  ${cat === "party" ? `<div class="sec" style="padding-top:10px"><div class="chips">${[...DAYS.map(d => [d.id, d.label]), ["all", "Tous"]].map(([k, l]) => `<button type="button" class="chip" data-act="lday" data-day="${k}" aria-pressed="${k === pday}">${l}</button>`).join("")}</div></div>` : ""}
+  <div class="sec" style="padding-top:0"><div class="seg" role="group" aria-label="Catégorie">${Object.entries(CATS).filter(([, v]) => !v.hidden).map(([k, v]) => `<button type="button" data-act="cat" data-cat="${k}" aria-pressed="${k === cat}">${v.label}</button>`).join("")}</div></div>
+  ${cat === "party" ? `<div class="sec" style="padding-top:10px"><div class="chips">${[...amsDays.map(d => [d.id, d.label]), ["all", "Tous"]].map(([k, l]) => `<button type="button" class="chip" data-act="lday" data-day="${k}" aria-pressed="${k === pday}">${l}</button>`).join("")}</div></div>` : ""}
   <div class="sec" style="padding-top:${cat === "party" ? 0 : 10}px"><div class="chips">
     ${dayId ? `<button type="button" class="chip" data-act="lf" data-f="open" aria-pressed="${lf.open}">Ouvert maintenant</button>` : ""}
     <button type="button" class="chip" data-act="lf" data-f="near" aria-pressed="${lf.near}">&lt; 15 min</button>
@@ -875,7 +909,7 @@ function renderPlaces() {
     <button type="button" class="chip" data-act="sort" data-v="dist" aria-pressed="${state.listSort === "dist"}">Distance</button>
     ${cat === "party" ? `<button type="button" class="chip" data-act="sort" data-v="time" aria-pressed="${state.listSort === "time"}">Heure</button>` : ""}
   </div></div>
-  <div class="sec" style="padding-top:4px"><p class="xs muted" style="margin:0 0 8px">${notes[cat]} ${meNear() ? "Distances depuis vous." : "Distances depuis l'auberge."}</p>
+  <div class="sec" style="padding-top:4px"><p class="xs muted" style="margin:0 0 8px">${notes[cat]} ${meNear() ? "Distances depuis vous." : "Distances depuis " + baseName(homeNow()) + "."}</p>
     <div class="list">${items.length ? items.map(p => placeRow(p, { dayId, lmin: c.lmin, showDay: pday === "all" })).join("") : `<p class="empty">Rien avec ces filtres. Enlevez-en un.</p>`}</div></div>
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
@@ -908,11 +942,13 @@ function renderInfo() {
   <div class="sec"><a class="btn primary" style="width:100%" href="${TRIP.guide}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique complet</a></div>
   <div class="sec"><h2>Urgences</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
     ${tels.map(([l, t, n]) => `<div class="tel"><span>${esc(l)}</span><a href="tel:${n}">${icon("phone", "i s")} ${esc(t)}</a></div>`).join("")}</div></div>
-  <div class="sec"><h2>L'auberge</h2><div class="card pad small">
-    <b>St Christopher's The Winston</b><br>Warmoesstraat 129, 1012 JA Amsterdam<br>Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité obligatoire
+  <div class="sec"><h2>Où dormir</h2><div class="list" style="margin-bottom:8px">${DAYS.filter(d => d.base).map(d => `<button type="button" class="li" data-act="open" data-id="${d.base.id}">${icon("bed")}<span style="flex:1;min-width:0"><span class="nm">${d.label} · ${esc(d.base.name)}</span><span class="sub">${esc(d.base.addr)}</span></span>${icon("chev", "i s")}</button>`).join("")}</div>
+    <div class="card pad small">
+    <b>Mer 28 → sam 31 · St Christopher's The Winston</b><br>Warmoesstraat 129, 1012 JA Amsterdam<br>Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité obligatoire
     <div class="btns"><button type="button" class="btn" data-act="copyAddr">Copier l'adresse</button><button type="button" class="btn" data-act="open" data-id="base">Voir la fiche</button></div></div></div>
   ${hitchSection("En stop", HLEGS)}
-  <div class="sec"><h2>Se déplacer</h2><div class="list">${MOVE_RULES.map(([ic, t, b]) => `<div class="li rule">${icon(ic)}<span style="flex:1;min-width:0"><span class="nm">${t}</span><span class="sub">${b}</span></span></div>`).join("")}</div>
+  ${Object.keys(RULES).map(k => `<div class="sec">${rulesCard(k)}</div>`).join("")}
+  <div class="sec"><h2>Se déplacer à Amsterdam</h2><div class="list">${MOVE_RULES.map(([ic, t, b]) => `<div class="li rule">${icon(ic)}<span style="flex:1;min-width:0"><span class="nm">${t}</span><span class="sub">${b}</span></span></div>`).join("")}</div>
     <div class="card pad small" style="margin-top:8px">${ferryBlock("centraal", "Prochains ferries depuis Centraal")}</div></div>
   <div class="sec"><h2>Réglages</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
     <div class="setrow"><span>Thème</span><select data-set="theme"><option value="system">Système</option><option value="light">Clair</option><option value="dark">Sombre</option></select></div>
@@ -955,9 +991,24 @@ function drawMe(center) {
   } else { meMarker.setLatLng([me.lat, me.lon]); meCircle.setLatLng([me.lat, me.lon]).setRadius(me.acc); }
   if (center) map.setView([me.lat, me.lon], center === true ? Math.max(map.getZoom(), 16) : map.getZoom());
 }
+// Parcours d'un jour : coupé au stop (deux villes), départ du lit de la veille
+function routeSegs(day) {
+  const segs = [[startOf(day)]];
+  for (const s of plan(day)) {
+    if (s.p.cat === "hitch") { segs.push([]); continue; }
+    if (s.p.lat != null) segs[segs.length - 1].push(s.p);
+  }
+  return segs.filter(g => g.length);
+}
+// Cadrage : la ville où l'on est aujourd'hui, sinon le tronçon le plus fourni
+function fitSeg(day) {
+  const segs = routeSegs(day), c = clock();
+  const pick = segs.length > 1 && c.phase === "day" && c.day.id === day ? segs[hitchPending(day, c.lmin) ? 0 : segs.length - 1] : [];
+  return pick.length > 1 ? pick : segs.reduce((a, b) => (b.length > a.length ? b : a));
+}
 function mapFilterDay() {
   const c = clock();
-  if (state.mapFilter === "today") return c.phase === "day" ? c.day.id : c.phase === "before" ? "mar" : null;
+  if (state.mapFilter === "today") return c.phase === "day" ? c.day.id : c.phase === "before" ? DAYS[0].id : null;
   if (state.mapFilter.startsWith("d:")) return state.mapFilter.slice(2);
   return null;
 }
@@ -982,11 +1033,13 @@ function drawMarkers(force = false) {
     m.on("add", () => { const el = m.getElement(); if (el) el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); placeSheet(p.id); } }); });
     m.addTo(p.cat === "base" ? markersLayer : grp);
   };
-  add({ ...BASEP, cat: "base" });
+  const home = day ? baseOf(day) : BASEP;
+  add(home);
+  if (day && startOf(day).id !== home.id) add(startOf(day));
   if (day) {
-    const steps = plan(day).filter(s => s.p.lat != null && s.id !== "base");
-    const pts = [[BASE.lat, BASE.lon], ...steps.map(s => [s.p.lat, s.p.lon])];
-    L.polyline(pts, { color: getComputedStyle(document.documentElement).getPropertyValue("--route").trim() || "#333", weight: 4, dashArray: "2 8", lineCap: "round" }).addTo(routeLayer);
+    const steps = plan(day).filter(s => s.p.lat != null && s.id !== "base" && s.p.cat !== "hitch");
+    const col = getComputedStyle(document.documentElement).getPropertyValue("--route").trim() || "#333";
+    for (const g of routeSegs(day)) if (g.length > 1) L.polyline(g.map(q => [q.lat, q.lon]), { color: col, weight: 4, dashArray: "2 8", lineCap: "round" }).addTo(routeLayer);
     steps.forEach((s, i) => add(s.p, { num: i + 1, key: s.id }));
     if (state.layers.curio) for (const s of steps) for (const e of s.en || []) if (BYID[e] && BYID[e].lat != null && !steps.some(x => x.id === e)) add(BYID[e]);
   } else {
@@ -1014,9 +1067,9 @@ function renderMapChrome() {
   const opts = [["today", "Aujourd'hui"], ["all", "Tout"], ["todo", "À faire"], ...DAYS.map(d => ["d:" + d.id, d.label])];
   $("#mapChips").innerHTML = opts.map(([v, l]) => `<button type="button" class="chip" data-act="mapf" data-v="${v}" aria-pressed="${state.mapFilter === v}">${l}</button>`).join("");
   const s = c.phase === "day" ? nextStep(c.day.id, c.lmin) : null;
-  const ess = Object.entries(ESSDEF).map(([k, v]) => { const n = nearest(k, 1)[0]; return `<button type="button" class="chip" data-act="ess" data-type="${k}">${icon(v.icon, "i s")} ${n ? walkMin(n.d) + "′" : ""}</button>`; }).join("");
+  const ess = cityNow() !== "Amsterdam" ? "" : Object.entries(ESSDEF).map(([k, v]) => { const n = nearest(k, 1)[0]; return `<button type="button" class="chip" data-act="ess" data-type="${k}">${icon(v.icon, "i s")} ${n ? walkMin(n.d) + "′" : ""}</button>`; }).join("");
   $("#mapPeek").innerHTML = `<div class="handle"></div>
-    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(s.id === "base" ? "Auberge" : s.p.name)}</span></span><span class="pr num">${s.via ? icon(s.vm || "ferry") : s.p.lat != null ? walkMin(dist(originFor(c.day.id, s, c.lmin).o, s.p)) + " min" : ""}</span></button>` : ""}
+    ${s ? `<button type="button" class="li" style="min-height:56px;padding:8px 10px;box-shadow:none" data-act="open" data-id="${s.p.id}">${smallShape(s.p.cat === "base" ? "base" : s.p.cat)}<span style="flex:1;min-width:0"><span class="sub" style="margin:0">Ensuite · ${s.at}</span><span class="nm">${esc(stepName(s))}</span></span><span class="pr num">${s.via ? icon(s.vm || "ferry") : s.p.cat === "hitch" ? icon("thumb") : s.p.lat != null ? (o => (o === s.p ? "" : walkMin(dist(o, s.p)) + " min"))(originFor(c.day.id, s, c.lmin).o) : ""}</span></button>` : ""}
     <div class="chips" style="margin:8px 0 0;padding:0">${ess}</div>`;
   document.documentElement.style.setProperty("--peek", ($("#mapPeek").offsetHeight || 120) + "px");
 }
@@ -1081,7 +1134,7 @@ function autoCheck(lat, lon, acc) {
   const here = { lat, lon }, r = state.radius + Math.min(acc, 30), t = Date.now(), day = c.day.id;
   const step = id => plan(day).find(s => s.id === id);
   // Candidats : étapes d'aujourd'hui, ou lieux hors plan ; jamais une étape d'un autre jour (coche manuelle)
-  const near = PLACES.filter(p => p.lat != null && dist(here, p) <= r
+  const near = PLACES.filter(p => p.lat != null && p.cat !== "hitch" && dist(here, p) <= r
       && (p.cat !== "party" || p.date === day || p.date === "all")
       && (!PLAN_DAY[p.id] || PLAN_DAY[p.id] === day))
     .sort((a, b) => { const da = dist(here, a), db = dist(here, b); return Math.abs(da - db) < 15 ? !!step(b.id) - !!step(a.id) || da - db : da - db; }); // le plus proche gagne ; même adresse : l'étape du jour
@@ -1090,7 +1143,7 @@ function autoCheck(lat, lon, acc) {
   if (!p || isDone(p.id)) return;
   const s = step(p.id);
   // Au pied de l'auberge (Belushi's) : seulement comme étape du jour, à partir d'1 h avant
-  if (dist(BASE, p) < 60 && !(s && c.lmin >= s.t - 60)) return;
+  if (dist(baseOf(day), p) < 60 && !(s && c.lmin >= s.t - 60)) return;
   inside[p.id] = inside[p.id] || t;
   if (t - inside[p.id] >= state.dwell * 1000) {
     state.checked[p.id] = t; save();
@@ -1204,7 +1257,7 @@ document.addEventListener("click", e => {
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
   switch (a) {
-    case "open": placeSheet(id); break;
+    case "open": if (BYID[id] && BYID[id].cat === "hitch") openHitch(BYID[id].hitch); else placeSheet(id); break;
     case "hitch": openHitch(id); break;
     case "hitchRules": openHitchRules(); break;
     case "closeSheet": closeSheet(); break;
@@ -1213,7 +1266,7 @@ document.addEventListener("click", e => {
     case "stepDone": {
       const day = el.dataset.day, s = (PLAN[day] || []).find(x => x.id === id), k = stepKey(s, day);
       toggleDone(k); renderActive();
-      if (isDone(k) && el.closest(".next")) toast(`Fait : ${s.id === "base" ? "l'auberge" : BYID[s.id].name}`, { undo: k });
+      if (isDone(k) && el.closest(".next")) toast(`Fait : ${s.id === "base" ? baseName(baseOf(day)) : BYID[s.id].name}`, { undo: k });
       break;
     }
     case "stepSkip": {
@@ -1234,12 +1287,12 @@ document.addEventListener("click", e => {
     case "share": { const p = BYID[id]; share(`${p.name} — ${p.why || ""}`, navUrl(p)); break; }
     case "sharePlan": {
       const day = el.dataset.day;
-      share(`${DAYBY[day].long} : ` + plan(day).map(s => `${s.at} ${s.id === "base" ? "auberge" : s.p.name}`).join(" → "), location.origin + location.pathname);
+      share(`${DAYBY[day].long} : ` + plan(day).map(s => `${s.at} ${s.id === "base" ? baseName(s.p) : s.p.name}`).join(" → "), location.origin + location.pathname);
       break;
     }
     case "shareRecap": {
       const n = PLACES.filter(p => isDone(p.id)).length;
-      share(`Amsterdam du 27 au 30 octobre : ${n} lieux cochés.`, "");
+      share(`Bruxelles, Rotterdam et Amsterdam du 26 au 30 octobre : ${n} lieux cochés.`, "");
       break;
     }
     case "cat": state.listCat = el.dataset.cat; if (state.listSort === "time" && state.listCat !== "party") state.listSort = "price"; save(); renderPlaces(); break;
@@ -1308,7 +1361,7 @@ function fitFilter() {
   setTimeout(() => {
     map.invalidateSize();
     if (day) {
-      const pts = [[BASE.lat, BASE.lon], ...plan(day).filter(s => s.p.lat != null).map(s => [s.p.lat, s.p.lon])];
+      const pts = fitSeg(day).map(q => [q.lat, q.lon]);
       const peekH = $("#mapPeek").offsetHeight || 120;
       map.fitBounds(L.latLngBounds(pts).pad(0.1), { paddingTopLeft: [16, 64], paddingBottomRight: [64, peekH + 16] });
     }

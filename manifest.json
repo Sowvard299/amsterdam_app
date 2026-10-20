@@ -1,7 +1,7 @@
 {
-  "name": "Ams · 27→30 octobre",
-  "short_name": "Ams 27→30",
-  "description": "Plan du jour, bars pas chers, soirées, visites et carte avec coche GPS pour Amsterdam.",
+  "name": "Ams · 26→30 octobre",
+  "short_name": "Ams 26→30",
+  "description": "Plan du jour, stop, bars pas chers, soirées, visites et carte avec coche GPS : Bruxelles, Rotterdam et Amsterdam.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

@@ -1,14 +1,18 @@
-# Ams · 27→30
+# Ams · 26→30
 
-Appli de voyage pour Amsterdam, du mardi 27 au vendredi 30 octobre 2026 (départ tôt le samedi 31),
-logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_app/
+Appli de voyage en stop : Paris → Bruxelles (lundi 26 octobre 2026, nuit à Bruxelles), Bruxelles → Rotterdam
+(mardi 27, nuit chez des amis), Rotterdam → Amsterdam (mercredi 28), Amsterdam jusqu'au vendredi 30, retour en stop
+le samedi 31. Logement à Amsterdam : Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_app/
 
 ## Ce qu'elle fait
 
 - **Aujourd'hui** : change selon le moment. Avant le voyage : compte à rebours, réservations à faire,
   météo prévue. Pendant : la prochaine étape avec l'heure de départ et le temps de marche, la frise
   du jour, les soirées du soir, ce qui est ouvert à moins de 15 min, les toilettes, distributeurs,
-  supermarchés et pharmacies les plus proches. Une journée va de 06:00 à 06:00.
+  supermarchés et pharmacies les plus proches (à Amsterdam). Une journée va de 06:00 à 06:00. Le jour d'un stop,
+  la carte du trajet tient lieu de prochaine étape (« Arrivés » ou « Passer ») ; elle s'efface seule 30 min après
+  l'heure prévue ou dès que le GPS vous place à moins de 15 km du lit du soir. Avant le stop, distances, météo et
+  essentiels restent ceux de la ville de la veille.
 - **Carte** : épingles en goutte façon Google Maps (bleu = visite, rouge = soirée, jaune = bar,
   vert = manger, violet = insolite), parcours numéroté du jour avec les curiosités du trajet,
   calques des essentiels, coche automatique par GPS.
@@ -16,21 +20,25 @@ logement Warmoesstraat 129. En ligne : https://sowvard299.github.io/amsterdam_ap
   ouvert maintenant, moins de 15 min, pas cher, à faire.
 - **Culture** : une histoire courte et sourcée pour chaque étape du plan (sauf 5 snacks et soirées sans
   histoire publiée), avec l'anecdote drôle quand elle existe (les légendes sont dites légendes).
-  17 curiosités gratuites « en chemin », placées sur le trajet qui mène à l'étape (Condomerie,
-  Oude Kerk, Lieverdje, Westerkerk, passage du Rijksmuseum, Kattenkabinet...). Mercredi, l'apéro passe
-  au Café 't Smalle (ancienne distillerie de 1780, terrasse sur le canal) ; mardi, De Drie Fleschjes
-  sert de plan B à Wynand Fockink. Recherches du 17/10/2026.
-- **Programme** : un secteur par jour (mar. vieux centre, mer. Jordaan et Ouest, jeu. Sud,
-  ven. Noord), avec le mode de transport de chaque trajet, le retour de nuit et Fait / Passer.
-- **Stop** : Paris → Bruxelles (lun. 26, nuit à Bruxelles), Bruxelles → Rotterdam → Amsterdam (mar. 27)
+  Curiosités gratuites « en chemin », placées sur le trajet qui mène à l'étape (Manneken Pis, Galeries
+  royales Saint-Hubert, Jeanneke Pis, maisons cubes de Rotterdam, Condomerie, Oude Kerk, Lieverdje,
+  Westerkerk, passage du Rijksmuseum...). Recherches du 17 et du 20/10/2026.
+- **Programme** : lun. Bruxelles (Grand-Place, Mort Subite, Mont des Arts, Fritland, Delirium) ; mar. Atomium
+  puis stop, Markthal et maisons cubes à Rotterdam ; mer. stop puis vieux centre d'Amsterdam ; jeu. Jordaan,
+  Van Gogh et après-midi calme au Vondelpark ; ven. Noord. Mode de transport de chaque trajet, retour de nuit
+  et Fait / Passer. Sur la carte, le parcours part du lit de la veille et se coupe au stop.
+- **Règles du jeudi** : petite dose de truffes (légales en smartshop aux Pays-Bas) : réduction des risques
+  (Trimbos, Drugs en Uitgaan), activités calmes de l'après-midi, et rappel que rien ne passe la frontière
+  (stupéfiant en France). Dans Aujourd'hui le jeudi, sur la fiche du Vondelpark et dans Infos.
+- **Stop** : Paris → Bruxelles (lun. 26), Bruxelles → Rotterdam (mar. 27), Rotterdam → Amsterdam (mer. 28)
   et retour Amsterdam → Paris (sam. 31). Pour chaque trajet : spots classés (attente médiane et note
   calculées sur le dump Hitchmap, ODbL), accès en transports vérifiés sur Transitous, pancartes,
   heure limite avant le plan B, lits à Bruxelles, règles de droit (FR, BE, NL) et sécurité à deux.
-  La carte du trajet s'affiche dans Aujourd'hui le lundi, le mardi jusqu'à l'auberge et le samedi, avec la météo
+  La carte du trajet s'affiche dans Aujourd'hui à l'heure du stop, avec la météo
   prévue au départ et à l'arrivée (Open-Meteo, gardée hors ligne), un bouton « Envoyer notre position » (message
-  prêt avec lien Google Maps et plaque à compléter) et des plans B chiffrés (horaires et prix FlixBus relevés le 17/10).
-- **Infos** : liste « avant de partir », urgences, auberge, règles pour se déplacer (à pied, tram,
-  ferry, bus de nuit, vélo, taxi), ferries en direct, réglages.
+  prêt avec lien Google Maps et plaque à compléter) et des plans B chiffrés (horaires et prix FlixBus relevés les 17 et 20/10).
+- **Infos** : liste « avant de partir », urgences, où dormir chaque nuit, règles du jeudi, règles pour se déplacer
+  à Amsterdam (à pied, tram, ferry, bus de nuit, vélo, taxi), ferries en direct, réglages.
 
 Chaque prix, horaire et soirée garde sa source, sa date et un niveau de confiance
 (sûr / probable / à vérifier). Données vérifiées le 15/10/2026, plan par secteurs et transports
@@ -47,7 +55,7 @@ arc-en-ciel, lueur bleue en bas de l'écran Aujourd'hui. Les épingles gardent l
 
 | Donnée | Source | Clé |
 |--------|--------|-----|
-| Météo heure par heure | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) | non |
+| Météo heure par heure (Amsterdam, Bruxelles, Rotterdam) | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) | non |
 | Ferries GVB (horaires prévus) | [Transitous](https://transitous.org/sources) | non |
 | Fond de carte | © OpenStreetMap contributors | non |
 
