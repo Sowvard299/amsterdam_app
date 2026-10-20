@@ -787,10 +787,10 @@ function todayDay(c) {
   const day = c.day.id;
   const pr = dayProgress(day);
   const s = nextStep(day, c.lmin);
-  const tonight = PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).map(p => ({ p, st: hoursState(p, day, c.lmin) }))
+  const tonight = PLACES.filter(p => p.cat === "party" && (p.date === day || (p.date === "all" && cityOf(day) === "Amsterdam"))).map(p => ({ p, st: hoursState(p, day, c.lmin) }))
     .filter(x => x.st.k !== "closed").sort((a, b) => (tmin(a.p.start) || 0) - (tmin(b.p.start) || 0) || (a.p.price ?? 99) - (b.p.price ?? 99));
   const inAms = cityNow() === "Amsterdam";
-  const tonightHTML = cityOf(day) !== "Amsterdam" ? "" : `<div class="sec"><h2>Ce soir (${tonight.length}) <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
+  const tonightHTML = cityOf(day) !== "Amsterdam" && !tonight.length ? "" : `<div class="sec"><h2>Ce soir (${tonight.length}) <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
     ${tonight.length ? `<div class="carousel">${tonight.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>
     <p class="xs muted" style="margin:6px 0 0">Programmes vérifiés le ${dmy(TRIP.dataVersion).slice(0, 5)} : revérifiez la veille sur la page de la soirée.</p>` : `<p class="empty">Pas de soirée datée ce soir.</p>`}</div>`;
   const openNow = PLACES.filter(p => (p.cat === "bar" || p.cat === "food") && p.lat != null)
@@ -863,7 +863,7 @@ function renderPlan() {
   <div class="sec"><div class="card pad">${timeline(day, { controls: true, lmin: c.phase === "day" && c.day.id === day ? c.lmin : null })}</div>
     <div class="btns"><button type="button" class="btn" data-act="mapDay" data-day="${day}">${icon("map")} Voir le parcours</button>
     <button type="button" class="btn" data-act="sharePlan" data-day="${day}">${icon("share")} Partager</button></div></div>
-  ${d.city === "Amsterdam" ? `<div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
+  ${d.city === "Amsterdam" || PLACES.some(p => p.cat === "party" && p.date === day) ? `<div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
     <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>` : ""}
   ${others.length ? `<div class="sec"><h2>Aussi dans le coin (${others.length})</h2><div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: 18 * 60 })).join("")}</div>
     <p class="xs muted" style="margin:6px 0 0">Les horaires affichés dans cette liste sont ceux de 18:00 ce jour-là.</p></div>` : ""}
@@ -876,10 +876,10 @@ function renderPlaces() {
   const c = clock();
   const cat = state.listCat;
   const dayId = c.phase === "day" ? c.day.id : null;
-  const amsDays = DAYS.filter(d => d.city === "Amsterdam");
-  const pday = cat === "party" ? (state.listDay || (dayId && cityOf(dayId) === "Amsterdam" ? dayId : amsDays[0].id)) : null;
+  const amsDays = DAYS.filter(d => d.city === "Amsterdam" || PLACES.some(p => p.cat === "party" && p.date === d.id));
+  const pday = cat === "party" ? (state.listDay || (dayId && amsDays.some(d => d.id === dayId) ? dayId : amsDays.find(d => d.city === "Amsterdam").id)) : null;
   let items = PLACES.filter(p => p.cat === cat);
-  if (cat === "party") items = items.filter(p => pday === "all" ? true : p.date === pday || p.date === "all");
+  if (cat === "party") items = items.filter(p => pday === "all" ? true : p.date === pday || (p.date === "all" && cityOf(pday) === "Amsterdam"));
   const lf = state.lf;
   if (lf.todo) items = items.filter(p => !isDone(p.id));
   if (lf.cheap) items = items.filter(p => priceOn(p, dayId) != null && priceOn(p, dayId) <= CHEAP[cat]);
