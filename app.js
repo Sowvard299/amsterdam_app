@@ -40,10 +40,9 @@ function clock(d = now()) {
   const lmin = early ? a.min + 1440 : a.min;
   const idx = DAYS.findIndex(x => x.date === logical);
   let phase = "after";
-  if (a.date === TRIP.leave && a.min >= 5 * 60 && a.min < 18 * 60) phase = "leave"; // la nuit de vendredi (N91 03:45, Garage Noord) reste vendredi
+  if (a.date === TRIP.leave && a.min >= 6 * 60) phase = "leave"; // samedi toute la journée : le stop du retour peut finir après la nuit ; la nuit de vendredi reste vendredi
   else if (logical < DAYS[0].date) phase = "before";
   else if (idx >= 0) phase = "day";
-  else if (logical === TRIP.leave && a.min < 18 * 60) phase = "leave";
   return { a, logical, lmin, idx, phase, day: phase === "day" ? DAYS[idx] : null };
 }
 // « 23:30 » → minutes du jour logique ; avant 06:00 on ajoute 24 h
@@ -113,7 +112,15 @@ let me = null; // {lat, lon, acc}
 const homeNow = () => { const c = clock(); return c.phase === "day" ? homeOf(c.day.id, c.lmin) : BASEP; };
 const cityNow = () => homeNow().city || "Amsterdam";
 const meNear = () => (me && dist(me, homeNow()) < 15000 ? me : null);
-const from = () => meNear() || homeNow();
+const from = () => {
+  if (meNear()) return me;
+  const c = clock();
+  if (c.phase === "day" && !hitchPending(c.day.id, c.lmin)) {
+    const st = plan(c.day.id).filter(s => s.p && s.p.lat != null && s.p.cat !== "hitch" && (isDone(stepKey(s, c.day.id)) || c.lmin >= s.t));
+    if (st.length) return st[st.length - 1].p;
+  }
+  return homeNow();
+};
 const isFar = p => !!p && p.lat != null && dist(from(), p) > 15000; // autre ville : on n'affiche pas de temps de marche
 function dist(a, b) {
   const R = 6371000, r = Math.PI / 180;
@@ -126,6 +133,8 @@ const walkMin = m => Math.max(1, Math.round(m * 1.3 / 75));
 const walkFrom = p => (p && p.lat != null ? walkMin(dist(from(), p)) : null);
 const kmTxt = m => (m < 1000 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(1).replace(".", ",") + " km");
 function navUrl(p) {
+  const n = p.cat === "base" && (state.notes[p.id] || "").trim();
+  if (n) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(n.split("\n")[0])}`; // adresse notée à la main (amis de Rotterdam)
   if (p.lat == null) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + " Amsterdam")}`;
   return state.nav === "apple"
     ? `https://maps.apple.com/?daddr=${p.lat},${p.lon}&dirflg=w`
@@ -140,7 +149,7 @@ function hoursState(p, dayId, lmin) {
     if (s == null) return { k: "unknown", txt: "horaire non affiché" };
     const e = e0 == null ? null : e0 <= s ? e0 + 1440 : e0;
     if (lmin < s) return { k: "later", txt: "commence à " + fmtMin(s), at: s };
-    if (e == null) return lmin < s + 180 ? { k: "open", txt: "en cours (fin non affichée)" } : { k: "closed", txt: "sans doute terminé" };
+    if (e == null) return lmin < (s >= 22 * 60 ? 29 * 60 : s + 180) ? { k: "open", txt: "en cours (fin non affichée)" } : { k: "closed", txt: "sans doute terminé" }; // une soirée de club finit vers 05:00
     if (lmin < e) return { k: "open", txt: "jusqu'à " + fmtMin(e), until: e };
     return { k: "closed", txt: "terminé" };
   }
@@ -153,7 +162,7 @@ function hoursState(p, dayId, lmin) {
   if (!m) return { k: "unknown", txt: "horaires inconnus" };
   let o = +m[1] * 60 + +m[2];
   if (o < 360) o += 1440;
-  if (m[3] === "?") return lmin >= o ? { k: "open?", txt: `ouvert dès ${m[1]}:${m[2]}, fermeture inconnue` } : { k: "later", txt: `ouvre à ${m[1]}:${m[2]}`, at: o };
+  if (m[3] === "?") return lmin < o ? { k: "later", txt: `ouvre à ${m[1]}:${m[2]}`, at: o } : lmin < 1440 ? { k: "open?", txt: `ouvert dès ${m[1]}:${m[2]}, fermeture inconnue` } : { k: "unknown", txt: "fermeture inconnue, sans doute fermé" };
   let c = +m[3].slice(0, 2) * 60 + +m[3].slice(3);
   if (c <= o) c += 1440;
   if (lmin < o) return { k: "later", txt: `ouvre à ${m[1]}:${m[2]}`, at: o };
@@ -195,7 +204,7 @@ const stepName = s => (s.id === "base" ? (s.p.id === "base" ? "Auberge : dépose
 // ou dont le lieu sera fermé à l'arrivée
 function missed(s, lmin, day) {
   if (lmin == null || state.skipped[day + ":" + s.id] === false) return false; // remise à la main
-  if (s.p.cat === "hitch") return lmin > s.t + (s.dur || 60) + 30 || (!!me && dist(me, baseOf(day)) < 15000); // stop : 30 min de grâce, ou le GPS déjà près du lit du soir
+  if (s.p.cat === "hitch") return (!!me && dist(me, baseOf(day)) < 15000) || lmin > Math.max(s.t + (s.dur || 60) + 30, (tmin(SUN[day] && SUN[day][1]) || 18 * 60) + 180); // stop : jusqu'à « Arrivés », le GPS près du lit du soir, ou 3 h après le coucher du soleil
   if (lmin > s.t + (s.dur || 60) + 15) return true;
   if (s.p.cat === "base" || lmin < s.t - 60) return false;
   return hoursState(s.p, day, lmin + walkMin(dist(originFor(day, s, lmin).o, s.p))).k === "closed";
@@ -292,7 +301,14 @@ function wxHours(fromMs, hours, city) {
   }
   return out;
 }
-const wxAge = () => (state.wx ? "MAJ " + hhmm(new Date(state.wx.ts)) : "");
+const wxAge = () => { if (!state.wx) return ""; const d = new Date(state.wx.ts), D = ams(d).date; return "MAJ " + (D !== ams().date ? D.slice(8, 10) + "/" + D.slice(5, 7) + " " : "") + hhmm(d); };
+function wxNow(city) {
+  const w = wxOf(city);
+  if (!w) return null;
+  if (w.current && Math.abs(now().getTime() - w.current.time * 1000) < 90 * 60e3) return w.current;
+  const h = wxHours(now().getTime(), 1, city).find(x => x.t >= now().getTime() - 3600e3);
+  return h ? { temperature_2m: h.temp, weather_code: h.code } : null;
+}
 
 // ───────────── Ferries (Transitous, horaires GVB prévus) ─────────────
 const ferryCache = {};
@@ -332,9 +348,15 @@ const ESSDEF = {
   sm: { label: "Super", icon: "cart", one: "Supermarché" },
   ph: { label: "Pharma", icon: "plus", one: "Pharmacie" },
 };
+const WC_OUT = /parkeerders|^parkeergarage\s*$|pierenbad|evenement|1 april tot 1 oktober|mooi weer|kinderboerderij/i;
 function essList(type) {
-  return ESS[type].filter(e => type !== "wc" || state.layers.urinals || !e[5]).map(e => ({ lat: e[0], lon: e[1], e }));
+  const c = clock(), thuSun = c.phase !== "day" || ["jeu", "ven"].includes(c.day.id);
+  return ESS[type].filter(e => type !== "wc" || ((state.layers.urinals || !e[5]) && !WC_OUT.test((e[2] || "") + " " + (e[4] || "")) && (thuSun || !/^donderdag tot en met zondag/i.test(e[4] || ""))))
+    .map(e => ({ lat: e[0], lon: e[1], e }));
 }
+// Horaires des WC de la ville, en néerlandais dans les données : les cas fréquents en français
+const wcHours = t => /^(24( uur)?|7 dagen per week, 24|24 uur per dag)/i.test(t) ? "24 h/24" : /^donderdag tot en met zondag van 18/i.test(t) ? "jeu.–dim. dès 18:00"
+  : /nachtelijke uren/i.test(t) ? "la nuit seulement" : /^alle werkdagen geopend van 08.00 - 18.00/i.test(t) ? "lun.–ven. 08:00–18:00" : t;
 function nearest(type, n = 3) {
   const f = from();
   return essList(type).map(x => ({ ...x, d: dist(f, x) })).sort((a, b) => a.d - b.d).slice(0, n);
@@ -350,12 +372,12 @@ function openEss(type) {
   const list = nearest(type, 3);
   const rows = list.map((x, i) => {
     const e = x.e;
-    const extra = type === "wc" ? `${e[3] ? euro(+e[3]) : "gratuit"}${e[4] ? " · " + esc(e[4]) : ""}${e[5] ? " · urinoir (hommes)" : ""}` : esc(e[3] || "");
+    const extra = type === "wc" ? `${e[3] ? euro(+e[3]) : "gratuit"}${e[4] ? " · " + esc(wcHours(e[4])) : ""}${e[5] ? " · urinoir (hommes)" : ""}` : esc(e[3] || "");
     const p = { name: e[2] || v.one, lat: x.lat, lon: x.lon };
     return `<div class="tel"><span><b>${i + 1}. ${esc(e[2] || v.one)}</b><br><span class="xs muted">${walkMin(x.d)} min · ${kmTxt(x.d)}${extra ? " · " + extra : ""}</span></span>
       <a class="btn sm" href="${navUrl(p)}" target="_blank" rel="noopener">Y aller ${icon("go", "i s")}</a></div>`;
   }).join("");
-  openSheet(`<div style="flex:1"><h2 id="sheetTitle">${v.one} les plus proches</h2><p class="small muted" style="margin:4px 0 0">${meNear() ? "depuis votre position" : me ? "depuis l'auberge (vous êtes loin d'Amsterdam)" : "depuis l'auberge (GPS coupé)"}</p></div>`,
+  openSheet(`<div style="flex:1"><h2 id="sheetTitle">${v.one} les plus proches</h2><p class="small muted" style="margin:4px 0 0">${meNear() ? "depuis votre position" : "depuis " + (from().id === "base" ? "l'auberge" : esc(from().name)) + (me ? " (vous êtes loin d'Amsterdam)" : " (GPS coupé)")}</p></div>`,
     `${rows}<p class="xs muted">${type === "wc" ? "Toilettes publiques de la ville (Gemeente Amsterdam, open data)" : "© OpenStreetMap contributors"} · instantané du 15/10/2026.</p>
      <button type="button" class="btn" data-act="showEss" data-type="${type}">${icon("map")} Voir sur la carte</button>`);
 }
@@ -372,6 +394,7 @@ function openSheet(head, content, { full = false } = {}) {
   sh.classList.add("open");
   sh.setAttribute("aria-hidden", "false");
   sh.setAttribute("aria-modal", "true");
+  sh.inert = false; $("#app").inert = true;
   $("#scrim").classList.add("on");
   if (!sheetOpen) history.pushState({ sheet: 1 }, "");
   sheetOpen = true;
@@ -383,6 +406,7 @@ function closeSheet(fromPop = false) {
   const sh = $("#sheet");
   sh.classList.remove("open", "full");
   sh.setAttribute("aria-hidden", "true");
+  sh.inert = true; $("#app").inert = false;
   $("#scrim").classList.remove("on");
   if (selMarker) { selMarker = null; drawMarkers(); }
   if (!fromPop) history.back();
@@ -489,7 +513,9 @@ function placeSheet(id) {
     ${p.id === "v-eye" || p.id === "v-lookout" ? ferryBlock("buiksloterweg", "Prochains ferries depuis Buiksloterweg") : ""}
     ${planned.length ? `<div class="kv"><h4>Prévu</h4><p>${planned.join("<br>")}</p></div>` : ""}
     ${p.cat !== "base" ? `<div class="kv"><h4>Fiabilité</h4><p>${confBadge(p.conf)} <span class="xs muted">vérifié le ${esc(p.ver || "15 oct.")}</span></p><div class="srcs">${src}</div></div>` : ""}
-    ${p.cat !== "base" ? `<div class="kv"><h4>Mes notes</h4><textarea data-note="${id}" placeholder="Visible seulement sur ce téléphone">${esc(state.notes[id] || "")}</textarea></div>` : ""}`;
+    ${p.cat === "base" ? `<div class="kv"><h4>Pratique</h4><p>${p.id === "base" ? "Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité de chacun" : esc(p.why || "")}</p>
+      <div class="btns"><button type="button" class="btn" data-act="big" data-t="${esc((state.notes[id] || "").trim().split("\n")[0] || p.addr)}" data-s="${esc(p.name)}">${icon("info")} Montrer au chauffeur</button></div></div>` : ""}
+    <div class="kv"><h4>${p.cat === "base" ? "Adresse exacte et notes" : "Mes notes"}</h4><textarea data-note="${id}" placeholder="${p.cat === "base" ? "1re ligne = adresse exacte (utilisée par « Y aller »), puis code, étage…" : "Visible seulement sur ce téléphone"}">${esc(state.notes[id] || "")}</textarea></div>`;
   openSheet(head, content);
   if (mapReady && p.lat != null && $("#s-map").classList.contains("active")) {
     selMarker = id; drawMarkers();
@@ -566,7 +592,7 @@ function timeline(day, { lmin = null, controls = false } = {}) {
 const HLEGS = typeof HITCH !== "undefined" ? HITCH.legs : [];
 const HLEG = Object.fromEntries(HLEGS.map(l => [l.id, l]));
 const gmDir = (s, mode = "transit") => `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=${mode}`;
-const signs = list => `<div class="signs">${list.map(t => `<span class="signc">${esc(t)}</span>`).join("")}</div>`;
+const signs = list => `<div class="signs">${list.map(t => `<button type="button" class="signc" data-act="big" data-t="${esc(t)}" aria-label="Afficher ${esc(t)} en plein écran">${esc(t)}</button>`).join("")}</div>`;
 const hitchRow = l => `<button type="button" class="li" data-act="hitch" data-id="${l.id}">${icon("thumb")}<span style="flex:1;min-width:0"><span class="nm">${esc(l.label)} · ${esc(l.from)} → ${esc(l.to)}</span><span class="sub">${l.km} km · ${esc(l.duration)}</span></span>${icon("chev", "i s")}</button>`;
 function hitchCard(l, { next = null, step = null, day = null } = {}) {
   const a = l.spots[0];
@@ -577,6 +603,7 @@ function hitchCard(l, { next = null, step = null, day = null } = {}) {
     <div class="meta row">${icon("clock", "i s")}<span class="grow"><b>Départ conseillé ${esc(l.startBy)}</b> · ${esc(a.wait)}</span>${confBadge(a.conf)}</div>
     ${signs(l.sign)}
     ${hitchWx(l)}
+    ${step && day && clock().phase === "day" && clock().lmin > step.t + (step.dur || 60) ? `<div class="alert bad">${icon("alert", "i s")}<span>Plus long que prévu : si le plan B ci-dessous s'applique, prenez le bus.</span></div>` : ""}
     <div class="alert warn">${icon("alert", "i s")}<span>Plan B : ${esc(l.noGo)}</span></div>
     <div class="btns lg"><a class="btn primary" href="${gmDir(a)}" target="_blank" rel="noopener">${icon("go")} Y aller</a>
       <button type="button" class="btn" data-act="hitch" data-id="${l.id}">${icon("info")} Détails</button>
@@ -600,9 +627,9 @@ function hitchWx(l) {
   if (days >= 0 && days <= 15 && navigator.onLine !== false && !hwxBusy[l.id] && (!c || Date.now() - c.ts > 3 * 3600e3)) {
     hwxBusy[l.id] = true;
     const pts = [l.from, l.to].map(n => HWX_AT[n]).filter(Boolean);
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pts.map(x => x[0]).join(",")}&longitude=${pts.map(x => x[1]).join(",")}`
-      + `&daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max&timezone=Europe%2FParis&start_date=${l.date}&end_date=${l.date}`)
-      .then(r => r.json()).then(d => {
+    fetchTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${pts.map(x => x[0]).join(",")}&longitude=${pts.map(x => x[1]).join(",")}`
+      + `&daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max&timezone=Europe%2FParis&start_date=${l.date}&end_date=${l.date}`, 8000)
+      .then(r => { if (!r.ok) throw new Error("http " + r.status); return r.json(); }).then(d => {
         const arr = Array.isArray(d) ? d : [d];
         const txt = arr.map((x, i) => { const y = x.daily; return `${[l.from, l.to][i]} : ${wmo(y.weather_code[0])[1]}, ${Math.round(y.temperature_2m_min[0])}–${Math.round(y.temperature_2m_max[0])} °C, pluie ${y.precipitation_probability_max[0]} %, vent ${Math.round(y.wind_speed_10m_max[0])} km/h`; }).join(" · ");
         state.hwx = { ...(state.hwx || {}), [l.id]: { ts: Date.now(), txt } }; save();
@@ -666,7 +693,7 @@ function openHitchRules() {
 
 // ───────────── Écran Aujourd'hui ─────────────
 function statusLine(c) {
-  const wx = wxOf() && wxOf().current;
+  const wx = wxNow();
   const left = c.phase === "day" ? `${esc(c.day.long.split(" ")[0])} ${c.day.label.split(" ")[1]} oct. · Jour ${c.idx + 1}/${DAYS.length}`
     : new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(now());
   const w = wx && c.phase !== "before" ? `<span class="wxchip">${icon(wmo(wx.weather_code)[0], "i s")}${Math.round(wx.temperature_2m)}°</span>` : "";
@@ -700,7 +727,7 @@ function todayBefore(c) {
   const prep = [
     { ok: standalone, txt: "Ajouter l'appli à l'écran d'accueil", act: "onboard" },
     { ok: state.gpsTested, txt: "Tester le GPS une fois", act: "gpsTest" },
-    { ok: state.mapSeen, txt: "Ouvrir la carte une fois sur le Wi-Fi", act: "tab", s: "s-map" },
+    { ok: state.mapPrepped, txt: "Préparer la carte hors ligne (Wi-Fi, 1 min)", act: "prepMap" },
     { ok: !!state.ck.guide, txt: "Lire le guide pratique", url: TRIP.guide, id: "guide" },
   ];
   const nPrep = prep.filter(x => x.ok).length;
@@ -711,7 +738,7 @@ function todayBefore(c) {
   }).join("");
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1 class="big num">J-${n}</h1><p>Lun 26 → Ven 30 oct. · Bruxelles, Rotterdam, Amsterdam</p></div>${xxx(null)}</div>
-  ${HLEG.h1 && c.a.date === HLEG.h1.date ? `<div class="sec">${hitchCard(HLEG.h1)}</div>` : ""}
+  ${HLEG.h1 && daysBetween(c.a.date, HLEG.h1.date) <= 1 && (c.a.date === HLEG.h1.date || c.a.min >= 17 * 60) ? `<div class="sec"><h2>${c.a.date === HLEG.h1.date ? "Ce matin" : "Demain matin"} · RER D 07:38, Gare du Nord</h2>${hitchCard(HLEG.h1)}</div>` : ""}
   ${hitchSection("En stop jusqu'à Amsterdam, et retour", HLEGS)}
   <div class="sec"><h2>À faire maintenant</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
     ${todo.length ? todo.map(i => ckRow(i, c.a.date)).join("") : `<p class="empty">Tout est prêt.</p>`}</div>
@@ -720,18 +747,18 @@ function todayBefore(c) {
     <div class="wxdays">${tiles}</div>
     <p class="xs muted" style="margin:6px 0 0">Normales fin octobre : 7 à 13,5 °C, une averse par jour. Nuit vers 17:15. Météo : <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a></p></div>
   <div class="sec"><h2>Préparer le téléphone <span class="grow"></span>${nPrep}/4</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
-    ${prep.map(x => `<div class="ck${x.ok ? " done" : ""}">${x.ok ? icon("check") : icon("chev")}<span class="t">${x.url ? `<a href="${x.url}" target="_blank" rel="noopener" data-act="guideRead">${esc(x.txt)}</a>` : `<button type="button" class="btn sm ghost" data-act="${x.act}" ${x.s ? `data-s="${x.s}"` : ""}>${esc(x.txt)}</button>`}</span></div>`).join("")}
+    ${prep.map(x => `<div class="ck${x.ok ? " done" : ""}">${x.ok ? icon("check") : icon("chev")}<span class="t">${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener" data-act="guideRead">${esc(x.txt)}</a>` : `<button type="button" class="btn sm ghost" data-act="${x.act}" ${x.s ? `data-s="${x.s}"` : ""}>${esc(x.txt)}</button>`}</span></div>`).join("")}
   </div></div>
   <div class="sec"><h2>Vos ${DAYS.length} jours</h2><div class="list">
     ${DAYS.map(d => { const pr = dayProgress(d.id); return `<button type="button" class="li" data-act="day" data-day="${d.id}">${icon("cal")}<span style="flex:1"><span class="nm">${d.label} · ${esc(d.theme)}</span><span class="sub">${esc(d.sector || d.sub)}</span>${d.move ? `<span class="modes">${modeChips(d.move)}</span>` : ""}</span><span class="pr num">${pr.done}/${pr.total}</span></button>`; }).join("")}
   </div></div>
-  <div class="sec"><a class="btn" style="width:100%" href="${TRIP.guide}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique (papiers, transports, règles, valise)</a></div>
+  <div class="sec"><a class="btn" style="width:100%" href="${esc(TRIP.guide)}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique (papiers, transports, règles, valise)</a></div>
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
-function nextCard(c, s) {
+function nextCard(c, s, hasTonight = true) {
   const day = c.day.id;
   if (!s) {
-    return `<div class="card pad next"><div class="when">Programme terminé</div><h3>Bien joué</h3><p class="why">Tout le plan du jour est fait ou passé. Regardez « Ce soir » ou rentrez.</p></div>`;
+    return `<div class="card pad next"><div class="when">Programme terminé</div><h3>Bien joué</h3><p class="why">Tout le plan du jour est fait ou passé. ${hasTonight ? "Regardez « Ce soir » ou rentrez." : "Bonne soirée ; le bouton « Rentrer » apparaît à 22:00."}</p></div>`;
   }
   if (s.p.cat === "hitch" && HLEG[s.p.hitch]) return hitchCard(HLEG[s.p.hitch], { step: s, day });
   const p = s.p, org = originFor(day, s, c.lmin), fromHitch = org.o === p, w = p.lat != null && !fromHitch ? walkMin(dist(org.o, p)) : 0;
@@ -746,7 +773,8 @@ function nextCard(c, s) {
   const end = s.t + (s.dur || 60);
   if (late > 15 && !here) alerts.push(c.lmin <= end
     ? `<div class="alert warn">Prévu ${s.at}–${fmtMin(end)} : déjà sur place ? Touchez « Fait ».</div>`
-    : `<div class="alert warn">En retard de ${durTxt(late)} · passer à la suite ?</div>`);
+    : c.lmin - end < 45 ? `<div class="alert warn">Prévu jusqu'à ${fmtMin(end)} · fait ? Touchez « Fait », sinon passez.</div>`
+    : `<div class="alert warn">En retard de ${durTxt(c.lmin - end)} sur la fin prévue · passer à la suite ?</div>`);
   return `<div class="card pad next">
     <div class="when">${icon(here ? "loc" : "clock", "i s")}${here ? "Vous y êtes" : "Ensuite · " + s.at}</div>
     <div class="row" style="margin-top:6px">${smallShape(p.cat === "base" ? "base" : p.cat, false)}<h3 class="grow" style="margin:0">${esc(stepName(s))}</h3>
@@ -765,7 +793,7 @@ function nextCard(c, s) {
 function weatherStrip(c) {
   const sun = SUN[c.day.id][1];
   if (!state.wx) return `<div class="card wx">${icon("sunset", "i s")} Coucher du soleil ${sun}<span class="muted small">${navigator.onLine ? "Météo indisponible pour l'instant" : "Météo indisponible hors ligne"}</span></div>`;
-  const city = cityNow(), cur = wxOf(city) && wxOf(city).current;
+  const city = cityNow(), cur = wxNow(city);
   const hrs = wxHours(now().getTime(), 8, city);
   let maxp = null;
   for (const h of hrs) if (h.pp != null && (!maxp || h.pp > maxp.pp)) maxp = h;
@@ -798,28 +826,29 @@ function todayDay(c) {
     .filter(x => x.st.k === "open" && x.w <= 15).sort((a, b) => (priceOn(a.p, day) ?? 99) - (priceOn(b.p, day) ?? 99)).slice(0, 6);
   const others = PLACES.filter(p => p.cat !== "party" && p.cat !== "curio" && (p.days || []).includes(day) && !(PLAN[day] || []).some(st => st.id === p.id));
   const home = baseOf(day), wHome = walkMin(dist(from(), home)), hName = home.id === "base" ? "Auberge" : home.name;
-  const late = c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
+  const lastRun = day === "ven" && c.lmin >= 23 * 60 + 30 && c.lmin < 24 * 60 + 30; // stop de samedi 07:15 : dernier métro
+  const late = lastRun || c.lmin >= 25 * 60 || (!s && c.lmin >= 22 * 60);
   const homeCard = late ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer</div>
-      <h3>${meNear() ? `${esc(hName)} · ${wHome} min à pied` : esc(home.id === "base" ? "Auberge · Warmoesstraat 129" : hName)}</h3><p class="why">${meNear() ? "" : me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}${c.day.move ? esc(c.day.move.home.t) : "Ferry F3 toute la nuit depuis Noord."}</p>
+      <h3>${meNear() ? `${esc(hName)} · ${wHome} min à pied` : esc(home.id === "base" ? "Auberge · Warmoesstraat 129" : hName)}</h3><p class="why">${lastRun ? `<b>Pour le stop de 07:15 : dernier départ bus 34 à 00:25 vers Noorderpark, métro 52 à 00:30. Sinon, FlixBus demain matin.</b> ` : ""}${meNear() ? "" : me ? "" : "GPS coupé : activez-le pour voir le temps de marche. "}${c.day.move ? esc(c.day.move.home.t) : "Ferry F3 toute la nuit depuis Noord."}</p>
       <div class="btns"><a class="btn primary" href="${navUrl(home)}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
-      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} ${home.id === "base" ? "Bus de nuit" : "Transports"}</a></div></div></div>` : "";
+      <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${home.lat},${home.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} ${c.day.move && c.day.move.home.m === "bus" ? "Bus de nuit" : "Transports"}</a></div></div></div>` : "";
   const rules = [...new Set(plan(day).map(st => st.p && st.p.rules).filter(k => k && RULES[k]))];
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1>${esc(c.day.theme)}</h1><p>Jour ${c.idx + 1}/${DAYS.length} · ${pr.done}/${pr.total} étapes · ${esc(c.day.sub)}</p></div>${xxx(pr.kinds)}</div>
   ${homeCard}
-  ${day === "ven" && c.lmin >= 18 * 60 && HLEG.h4 && HLEG.h4.eve ? `<div class="sec"><div class="alert warn" style="margin-top:0">${icon("thumb", "i s")}<span>Demain, ${esc(HLEG.h4.eve.replace(/^./, m => m.toLowerCase()))} <button type="button" class="btn sm ghost" data-act="hitch" data-id="h4">Détails</button></span></div></div>` : ""}
-  <div class="sec">${nextCard(c, s)}</div>
+  ${day === "ven" && c.lmin >= 18 * 60 && HLEG.h4 && HLEG.h4.eve ? `<div class="sec"><div class="alert warn" style="margin-top:0">${icon("thumb", "i s")}<span>${c.lmin < 24 * 60 ? "Demain" : "Ce matin"}, ${esc(HLEG.h4.eve.replace(/^./, m => m.toLowerCase()))} <button type="button" class="btn sm ghost" data-act="hitch" data-id="h4">Détails</button></span></div></div>` : ""}
+  <div class="sec">${nextCard(c, s, tonight.length > 0)}</div>
+  ${inAms ? `<div class="sec">${essGrid()}</div>` : ""}
   ${rules.map(k => `<div class="sec">${rulesCard(k)}</div>`).join("")}
   <div class="sec">${weatherStrip(c)}</div>
   <div class="sec"><h2>Se déplacer aujourd'hui</h2>${moveCard(c.day)}</div>
   ${c.lmin >= 22 * 60 ? tonightHTML : ""}
   <div class="sec"><h2>Le plan du jour <span class="grow"></span>${pr.done}/${pr.total}</h2><div class="card pad" style="padding-top:6px;padding-bottom:6px">${timeline(day, { lmin: c.lmin })}</div></div>
   ${c.lmin < 22 * 60 ? tonightHTML : ""}
-  <div class="sec"><h2>Ouvert maintenant, à moins de 15 min</h2>
+  ${openNow.length || inAms ? `<div class="sec"><h2>Ouvert maintenant, à moins de 15 min${meNear() ? "" : " de votre dernière étape"}</h2>
     ${openNow.length ? `<div class="list">${openNow.map(x => placeRow(x.p, { dayId: day, lmin: c.lmin })).join("")}</div>`
-      : `<p class="empty">Aucun bar ni resto aux horaires connus n'est ouvert à moins de 15 min.</p>`}</div>
-  ${inAms ? `<div class="sec"><h2>Près de vous</h2>${essGrid()}</div>` : ""}
-  ${others.length ? `<div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})${icon("chev", "i s chev")}</summary>
+      : `<p class="empty">Aucun bar ni resto aux horaires connus n'est ouvert à moins de 15 min.</p>`}</div>` : ""}
+  ${others.length && inAms ? `<div class="sec"><details><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center">Aussi dans le coin (${others.length})${icon("chev", "i s chev")}</summary>
     <div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: c.lmin })).join("")}</div></details></div>` : ""}
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
 }
@@ -829,6 +858,10 @@ function todayLeave(c) {
   const h4 = HLEG.h4;
   return `${statusLine(c)}
   <div class="flag"><div class="t"><h1>Retour</h1><p>Samedi 31 octobre · ${h4 ? "en stop jusqu'à Paris" : "Centraal à 7 min à pied"}</p></div>${xxx({ voir: true, manger: true, sortir: true })}</div>
+  ${c.a.min < 8 * 60 ? `<div class="sec"><div class="card pad next" style="border-left-color:var(--ok)"><div class="when" style="color:var(--ok)">Rentrer d'abord</div><h3>Auberge · Warmoesstraat 129</h3>
+    <p class="why">${DAYBY.ven && DAYBY.ven.move ? esc(DAYBY.ven.move.home.t) : ""}</p>
+    <div class="btns"><a class="btn primary" href="${navUrl(BASEP)}" target="_blank" rel="noopener">${icon("walk")} À pied</a>
+    <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${BASEP.lat},${BASEP.lon}&travelmode=transit" target="_blank" rel="noopener">${icon("bus")} Transports</a></div></div></div>` : ""}
   ${h4 ? `<div class="sec">${hitchCard(h4)}</div>` : ""}
   <div class="sec"><h2>Avant de fermer la porte</h2><div class="card pad" style="padding-top:4px;padding-bottom:4px">
     ${items.map((t, i) => { const id = "leave-" + i; const done = !!state.ck[id]; return `<label class="ck${done ? " done" : ""}"><input type="checkbox" data-act="ck" data-id="${id}" ${done ? "checked" : ""}><span class="t">${esc(t)}</span></label>`; }).join("")}
@@ -864,7 +897,7 @@ function renderPlan() {
     <div class="btns"><button type="button" class="btn" data-act="mapDay" data-day="${day}">${icon("map")} Voir le parcours</button>
     <button type="button" class="btn" data-act="sharePlan" data-day="${day}">${icon("share")} Partager</button></div></div>
   ${d.city === "Amsterdam" || PLACES.some(p => p.cat === "party" && p.date === day) ? `<div class="sec"><h2>Soirées ce soir-là <span class="grow"></span><button type="button" class="btn sm ghost" data-act="partiesDay" data-day="${day}">Tout voir</button></h2>
-    <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || p.date === "all")).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>` : ""}
+    <div class="carousel">${PLACES.filter(p => p.cat === "party" && (p.date === day || (p.date === "all" && d.city === "Amsterdam"))).sort((a, b) => (a.price ?? 99) - (b.price ?? 99)).slice(0, 8).map(p => placeRow(p)).join("")}</div></div>` : ""}
   ${others.length ? `<div class="sec"><h2>Aussi dans le coin (${others.length})</h2><div class="list">${others.map(p => placeRow(p, { dayId: day, lmin: 18 * 60 })).join("")}</div>
     <p class="xs muted" style="margin:6px 0 0">Les horaires affichés dans cette liste sont ceux de 18:00 ce jour-là.</p></div>` : ""}
   <svg class="gables" aria-hidden="true"><use href="#i-gables"/></svg>`;
@@ -935,13 +968,17 @@ function renderInfo() {
     ["Consulat de France (lun.–ven.)", "+31 20 2499 164", "+31202499164"],
     ["Urgence consulaire grave", "+31 6 51 59 69 48", "+31651596948"],
   ];
-  $("#s-info").innerHTML = `<div class="status"><span class="grow">Infos</span></div>
-  <div class="sec" style="padding-top:0"><h2>Avant de partir <span class="grow"></span>${done}/${CHECKLIST.length}</h2>
+  const during = c.phase !== "before";
+  const urg = `<div class="sec"${during ? ' style="padding-top:0"' : ""}><h2>Urgences</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
+    ${tels.map(([l, t, n]) => `<div class="tel"><span>${esc(l)}</span><a href="tel:${n}">${icon("phone", "i s")} ${esc(t)}</a></div>`).join("")}
+    <p class="xs muted" style="margin:8px 0">Le 112 marche en France, en Belgique et aux Pays-Bas. Carte perdue : faites opposition dans l'appli de la banque ou au numéro au dos de la carte (notez-le avant de partir).</p></div></div>`;
+  const ckl = `<div class="sec"${during ? "" : ' style="padding-top:0"'}><details${during ? "" : " open"}><summary class="label" style="cursor:pointer;min-height:var(--tap);display:flex;align-items:center;gap:8px"><span class="grow">Avant de partir</span>${done}/${CHECKLIST.length}${icon("chev", "i s chev")}</summary>
     <div class="progress"><span style="width:${Math.round(done / CHECKLIST.length * 100)}%"></span></div>
-    <div class="card pad" style="padding-top:4px;padding-bottom:4px">${CHECKLIST.map(i => ckRow(i, c.a.date)).join("")}</div></div>
-  <div class="sec"><a class="btn primary" style="width:100%" href="${TRIP.guide}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique complet</a></div>
-  <div class="sec"><h2>Urgences</h2><div class="card pad" style="padding-top:2px;padding-bottom:2px">
-    ${tels.map(([l, t, n]) => `<div class="tel"><span>${esc(l)}</span><a href="tel:${n}">${icon("phone", "i s")} ${esc(t)}</a></div>`).join("")}</div></div>
+    <div class="card pad" style="padding-top:4px;padding-bottom:4px">${CHECKLIST.map(i => ckRow(i, c.a.date)).join("")}</div></details></div>`;
+  $("#s-info").innerHTML = `<div class="status"><span class="grow">Infos</span></div>
+  ${during ? urg + ckl : ckl}
+  <div class="sec"><a class="btn primary" style="width:100%" href="${esc(TRIP.guide)}" target="_blank" rel="noopener" data-act="guideRead">${icon("doc")} Guide pratique complet (en ligne)</a></div>
+  ${during ? "" : urg}
   <div class="sec"><h2>Où dormir</h2><div class="list" style="margin-bottom:8px">${DAYS.filter(d => d.base).map(d => `<button type="button" class="li" data-act="open" data-id="${d.base.id}">${icon("bed")}<span style="flex:1;min-width:0"><span class="nm">${d.label} · ${esc(d.base.name)}</span><span class="sub">${esc(d.base.addr)}</span></span>${icon("chev", "i s")}</button>`).join("")}</div>
     <div class="card pad small">
     <b>Mer 28 → sam 31 · St Christopher's The Winston</b><br>Warmoesstraat 129, 1012 JA Amsterdam<br>Arrivée dès 15:00 · départ avant 11:00 · pièce d'identité obligatoire
@@ -956,6 +993,7 @@ function renderInfo() {
     <div class="setrow"><span>Appli d'itinéraire</span><select data-set="nav"><option value="google">Google Maps</option><option value="apple">Plans (Apple)</option></select></div>
     <div class="setrow"><span>Rayon de coche GPS</span><select data-set="radius">${[25, 40, 60, 100].map(v => `<option value="${v}">${v} m</option>`).join("")}</select></div>
     <div class="setrow"><span>Temps sur place avant de cocher</span><select data-set="dwell">${[[0, "immédiat"], [60, "1 min"], [180, "3 min"], [300, "5 min"]].map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></div>
+    <label class="setrow"><span>GPS (coche auto, temps de marche)</span><input type="checkbox" data-set="gps" ${state.gps ? "checked" : ""} style="width:22px;height:22px"></label>
     <div class="setrow"><span>Masquer les lieux faits sur la carte</span><input type="checkbox" data-set="hideDone" ${state.hideDone ? "checked" : ""} style="width:22px;height:22px"></div>
     <div class="setrow"><span>Mes coches</span><span><button type="button" class="btn sm" data-act="export">Exporter</button> <button type="button" class="btn sm" data-act="import">Importer</button></span></div>
     <div class="setrow"><span>Tout remettre à zéro</span><button type="button" class="btn sm" data-act="reset">Effacer</button></div>
@@ -970,11 +1008,11 @@ function renderInfo() {
 }
 
 // ───────────── Carte ─────────────
-let map = null, mapReady = false, markersLayer = null, essLayer = null, routeLayer = null, meMarker = null, meCircle = null, selMarker = null, follow = false;
+let tilesLayer = null, map = null, mapReady = false, markersLayer = null, essLayer = null, routeLayer = null, meMarker = null, meCircle = null, selMarker = null, follow = false;
 function initMap() {
   if (map) return;
   map = L.map("map", { zoomControl: false, attributionControl: true }).setView([BASE.lat, BASE.lon], 14);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: true, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+  tilesLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: true, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
   markersLayer = L.layerGroup().addTo(map);
   essLayer = L.layerGroup().addTo(map);
   routeLayer = L.layerGroup().addTo(map);
@@ -1090,8 +1128,27 @@ function layersSheet() {
      <p class="xs muted">Les calques Visites à Insolite s'appliquent aux vues « Tout » et « À faire » ; dans la vue d'un jour, Insolite montre les curiosités du trajet.</p>`);
 }
 
+// Carte hors ligne : on parcourt une fois, comme à la main, le parcours de chaque jour et les spots de stop (≈ 300 tuiles)
+async function prepMap() {
+  if (!navigator.onLine) { toast("Connectez-vous au Wi-Fi d'abord"); return; }
+  closeSheet(); show("s-map"); initMap();
+  await new Promise(r => setTimeout(r, 600));
+  const pts = d => (PLAN[d] || []).map(s => (s.id === "base" ? baseOf(d) : BYID[s.id])).filter(p => p && p.lat != null && p.cat !== "hitch").map(p => [p.lat, p.lon]);
+  const views = [...DAYS.map(d => L.latLngBounds(pts(d.id))).filter(b => b.isValid()), ...HLEGS.map(l => l.spots[0]).filter(x => x && x.lat != null).map(x => L.latLng(x.lat, x.lon))];
+  toast("Préparation de la carte… gardez l'appli ouverte", { sticky: true });
+  const wait = () => new Promise(r => { const t = setTimeout(r, 6000); tilesLayer.once("load", () => { clearTimeout(t); r(); }); });
+  for (const v of views) {
+    if (v.lat != null) { map.setView(v, 15, { animate: false }); await wait(); continue; }
+    map.fitBounds(v, { animate: false, padding: [24, 24] }); await wait();
+    if (map.getZoom() < 16) { map.setZoom(map.getZoom() + 1, { animate: false }); await wait(); }
+  }
+  state.mapPrepped = state.mapSeen = true; save();
+  toast("Carte prête hors ligne : parcours et spots de stop");
+  renderMap();
+}
+
 // ───────────── GPS ─────────────
-let watchId = null, lastRender = 0, gpsWarned = false;
+let watchId = null, lastRender = 0, gpsWarned = false, swReg = null;
 const inside = {};
 function updateLocBtn() {
   const b = $("#btnLocate");
@@ -1155,9 +1212,10 @@ function autoCheck(lat, lon, acc) {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     if (state.gps && watchId == null) startGps();
+    if (swReg) swReg.update().catch(() => {});
     loadWeather();
     renderActive();
-  }
+  } else if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } // state.gps reste vrai : il repart au retour
 });
 
 // ───────────── Accueil ─────────────
@@ -1185,13 +1243,13 @@ function onboard(step = 1) {
 
 // ───────────── Toast ─────────────
 let toastT = null;
-function toast(msg, { undo = null, action = null, low = false } = {}) {
+function toast(msg, { undo = null, action = null, low = false, sticky = false } = {}) {
   const t = $("#toast");
   if (low && t.classList.contains("on") && t.querySelector("button")) return; // ne jamais écraser un message avec Annuler
   t.innerHTML = esc(msg) + (undo ? `<button type="button" data-act="undo" data-id="${esc(undo)}">Annuler</button>` : "") + (action ? `<button type="button" data-act="${action.act}"${action.id ? ` data-id="${esc(action.id)}"` : ""}>${esc(action.label)}</button>` : "");
   t.classList.add("on");
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.classList.remove("on"), action || undo ? 8000 : 4000);
+  if (!sticky) toastT = setTimeout(() => t.classList.remove("on"), action || undo ? 8000 : 4000); // une mise à jour reste affichée jusqu'au rechargement
 }
 
 // ───────────── Navigation ─────────────
@@ -1308,9 +1366,12 @@ document.addEventListener("click", e => {
     } break;
     case "hourly": { const h = $("#hourly"); if (h) { h.hidden = !h.hidden; if (!h.hidden) h.innerHTML = hourlyHTML(); } break; }
     case "gpsTest": closeSheet(); onboard(2); break;
+    case "prepMap": prepMap(); break;
     case "onboard": onboard(1); break;
     case "ob2": onboard(2); break;
     case "obGps": state.onboarded = true; save(); $("#onboard").classList.remove("on"); startGps(); show("s-map"); break;
+    case "big": { const o = $("#onboard"); o.innerHTML = `<button type="button" class="big-sign" data-act="bigClose"><span>${esc(el.dataset.t || "")}</span>${el.dataset.s ? `<small>${esc(el.dataset.s)}</small>` : ""}<em>Touchez pour fermer</em></button>`; o.classList.add("on", "bigmode"); break; }
+    case "bigClose": $("#onboard").classList.remove("on", "bigmode"); break;
     case "obDone": state.onboarded = true; save(); $("#onboard").classList.remove("on"); renderActive(); break;
     case "guideRead": state.ck.guide = true; save(); setTimeout(renderActive, 300); break;
     case "copyAddr": copy("Warmoesstraat 129, 1012 JA Amsterdam").then(() => toast("Adresse copiée"), () => toast("Copie impossible")); break;
@@ -1347,6 +1408,7 @@ document.addEventListener("change", e => {
   if (el.dataset.layer) { state.layers[el.dataset.layer] = el.checked; save(); drawMarkers(); return; }
   if (el.dataset.set) {
     const k = el.dataset.set;
+    if (k === "gps") { if (el.checked) { if (!state.gpsTested) onboard(2); else startGps(); } else stopGps(); return; }
     state[k] = el.type === "checkbox" ? el.checked : ["radius", "dwell"].includes(k) ? +el.value : el.value;
     save(); applyTheme(); if (k === "hideDone") drawMarkers();
   }
@@ -1372,24 +1434,26 @@ $("#btnZoomOut").addEventListener("click", () => map && map.zoomOut());
 $("#btnLayers").addEventListener("click", layersSheet);
 $("#btnLocate").addEventListener("click", () => {
   if (watchId == null) { if (!state.onboarded || !state.gpsTested) onboard(2); else startGps(); return; }
-  if (me) { follow = !follow; map.setView([me.lat, me.lon], Math.max(map.getZoom(), 16)); }
+  if (me && !follow) { follow = true; map.setView([me.lat, me.lon], Math.max(map.getZoom(), 16)); }
+  else { stopGps(); toast("GPS coupé"); }
   updateLocBtn();
 });
 
 // ───────────── Réseau et service worker ─────────────
 function netState() {
   document.body.classList.toggle("is-offline", !navigator.onLine);
-  $("#offlineBar").textContent = "Hors ligne · plan et lieux disponibles · carte : zones déjà vues" + (state.wx ? " · météo de " + hhmm(new Date(state.wx.ts)) : "");
+  $("#offlineBar").textContent = "Hors ligne · plan et lieux disponibles · carte : zones déjà vues" + (state.wx ? " · météo " + wxAge() : "");
 }
 window.addEventListener("online", () => { netState(); loadWeather(true); });
 window.addEventListener("offline", netState);
 if ("serviceWorker" in navigator && window.isSecureContext) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(reg => {
+    swReg = reg;
     reg.addEventListener("updatefound", () => {
       const w = reg.installing;
       w && w.addEventListener("statechange", () => {
-        if (w.state === "installed" && hadController) toast("Nouvelle version des données", { action: { act: "reload", label: "Recharger" } });
+        if (w.state === "installed" && hadController) toast("Nouvelle version des données", { action: { act: "reload", label: "Recharger" }, sticky: true });
         else if (w.state === "activated" && !hadController) toast("Prête hors ligne", { low: true });
       });
     });
