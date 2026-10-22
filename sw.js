@@ -1,7 +1,7 @@
 // Hors ligne : l'appli (coquille + données) est servie depuis le cache puis rafraîchie en arrière-plan.
 // Tuiles OSM : seulement celles déjà affichées (aucun préchargement massif, politique d'OSM), 2 000 au plus.
 // Polices : préchargées à l'installation (sinon, hors ligne, les icônes s'affichent en toutes lettres).
-const VERSION = "ams-v10-audit-2026-10-21";
+const VERSION = "ams-v11-bxl-2026-10-22";
 const SHELL = ["./", "index.html", "app.css", "app.js", "data.js", "ess.js", "manifest.json", "icon.svg", "icon-192.png", "icon-512.png"];
 const CDN = [
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
